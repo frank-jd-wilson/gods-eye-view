@@ -52,3 +52,5 @@
 失敗請記錄：完整 Commit、瀏覽器版本、起始網址、選擇語系、操作順序、視窗尺寸／縮放、預期與實際結果。附上不含金鑰的畫面或 Console 錯誤；外部來源 HTTP 失敗與介面翻譯問題分開記錄。
 
 Codex 先前的 DOM click 通過只驗證事件與狀態，不代表原生輸入完全通過。獨立 Chromium 滑鼠切換曾通過；組合式尺寸改變／重載原生輸入仍待上述 Windows 驗收。本腳本在 Linux Codex 環境製作，**尚未於 Windows 11 的 cmd.exe 真正雙擊執行**；文件／命令核對與雲端 App 檢查不能取代 Windows 實機結果。
+
+底圖網路故障、更新命令與 Esri attribution 驗收，另見 [Windows Edge 底圖驗收](zh-TW-basemap-acceptance.md)。

@@ -482,7 +482,8 @@
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-TW.json"
+      "src/i18n/locales/zh-TW.json",
+      "src/maps/preference.js"
     ],
     "external": []
   },
@@ -815,7 +816,8 @@
       "src/ui/layerNames.js",
       "src/ui/statusText.js",
       "src/ui/statusBadge.js",
-      "src/scopeMaskPolicy.js"
+      "src/scopeMaskPolicy.js",
+      "src/maps/preference.js"
     ],
     "external": ["cesium"]
   },
@@ -1662,7 +1664,8 @@
       "src/i18n/locales/es.json",
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
-      "src/i18n/locales/zh-TW.json"
+      "src/i18n/locales/zh-TW.json",
+      "src/maps/preference.js"
     ],
     "external": ["cesium"]
   },
@@ -2629,7 +2632,8 @@
       "src/voice/geminiCaptureWorklet.js",
       "src/ui/statusBadge.js",
       "src/sceneCommandRelease.js",
-      "src/scopeMaskPolicy.js"
+      "src/scopeMaskPolicy.js",
+      "src/maps/preference.js"
     ],
     "external": [
       "hls.js",

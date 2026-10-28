@@ -537,7 +537,7 @@ test('the Visual Presets tray owns Map Source and the retired left panel is abse
   );
   assert.match(
     controls,
-    /await controller\.setStack\(stackId\)/,
+    /await controller\.setStack\(stackId, \{ retry: syncShare \}\)/,
     'selection still delegates source loading to the map controller',
   );
   assert.match(

@@ -892,7 +892,7 @@ test('a failed Esri construction shows OSM at once, backs off while retries fail
   env.controller.destroy();
 });
 
-test('retries of a fallback that keeps failing back off to a 10 minute cap', async (t) => {
+test('imagery recovery stops after three attempts even when the service keeps failing', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const env = publicFixture();
   const esri = failingEsri(env);
@@ -901,7 +901,11 @@ test('retries of a fallback that keeps failing back off to a 10 minute cap', asy
     t.mock.timers.tick(delay * 1000);
     await settle();
   }
-  assert.equal(esri.attempts, 8);
+  assert.equal(
+    esri.attempts,
+    4,
+    'initial request plus three recovery attempts; no indefinite retry',
+  );
   env.controller.destroy();
 });
 
@@ -1381,4 +1385,90 @@ test('a hung imagery attempt that lands after its deadline is released, never ca
   env.controller.destroy();
   await settle();
   assert.equal(good.destroyed, true);
+});
+
+test('OSM failures pause its layer, deny tile retry, and cannot auto-switch back to Esri', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const esri = failingEsri(env);
+  await env.controller.setStack('esri-imagery');
+  const errors = env.providers.get('osm').errorEvent;
+  const error = { retry: true };
+  errors.raise(error);
+  errors.raise(error);
+  assert.equal(error.retry, false);
+  assert.equal(env.controller.getState().imagerySuspended, true);
+  assert.equal(env.imagery.at(-1).show, false);
+  assert.match(env.controller.getState().lastError, /OpenStreetMap/);
+  for (let i = 0; i < 5; i++) {
+    t.mock.timers.tick(600_000);
+    await settle();
+  }
+  assert.equal(
+    esri.attempts,
+    1,
+    'no recovery requests behind a failed OSM layer',
+  );
+  errors.raise(error);
+  assert.equal(env.controller.getActiveId(), 'osm');
+  esri.failing = false;
+  const camera = {
+    position: { x: 1, y: 2, z: 3 },
+    heading: 0.7,
+    pitch: -0.5,
+    roll: 0.1,
+  };
+  env.viewer.camera = camera;
+  const snapshot = structuredClone(camera);
+  const terrain = env.viewer.terrainProvider;
+  await env.controller.setStack('esri-imagery', { retry: true });
+  assert.equal(
+    esri.attempts,
+    2,
+    'manual retry bypasses cached construction fallback',
+  );
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  assert.equal(env.controller.getState().imagerySuspended, false);
+  assert.deepEqual(env.viewer.camera, snapshot);
+  assert.equal(env.viewer.terrainProvider, terrain);
+  env.controller.destroy();
+});
+
+test('selecting OSM again recreates a paused layer without changing the camera', async () => {
+  const env = publicFixture();
+  await env.controller.setStack('osm');
+  const original = env.imagery.at(-1);
+  env.providers.get('osm').errorEvent.raise({ timesRetried: 1 });
+  assert.equal(env.controller.getState().imagerySuspended, true);
+  await env.controller.setStack('osm', { silent: true });
+  assert.equal(
+    env.imagery.at(-1),
+    original,
+    'a scene handoff cannot restart paused requests',
+  );
+  assert.equal(env.controller.getState().imagerySuspended, true);
+  await env.controller.setStack('osm', { retry: true });
+  assert.notEqual(env.imagery.at(-1), original);
+  assert.equal(env.controller.getState().imagerySuspended, false);
+  env.controller.destroy();
+});
+
+test('Esri service credit is displayed with Powered by Esri and removed when OSM is active', async () => {
+  const env = publicFixture();
+  env.providers.get('esri-imagery').credit = {
+    html: 'Source: official changing supplier',
+  };
+  await env.controller.setStack('esri-imagery');
+  assert.match(
+    [...env.credits][0].html,
+    /Powered by Esri.*Source: official changing supplier/,
+  );
+  assert.doesNotMatch([...env.credits][0].html, /Maxar/);
+  await env.controller.setStack('osm');
+  assert.equal(
+    env.credits.size,
+    0,
+    'service credit follows the visible source',
+  );
+  env.controller.destroy();
 });

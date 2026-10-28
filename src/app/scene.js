@@ -15,6 +15,7 @@ import {
 } from '../renderGovernor.js';
 import { describeError } from './errors.js';
 import { t } from '../i18n/index.js';
+import { readMapPreference } from '../maps/preference.js';
 
 /** Construct the application globe using the caller's local configuration. */
 export async function createApplicationScene({
@@ -122,9 +123,14 @@ export async function createApplicationScene({
     onError: (message) => console.warn('[MapStack]', message),
   });
   defer(() => mapStackController.destroy());
-  await mapStackController.setStack(tileset ? 'photoreal' : 'esri-imagery', {
-    silent: true,
-  });
+  // An explicit share is restored later by the existing share coordinator.
+  const preferredMap = readMapPreference();
+  await mapStackController.setStack(
+    preferredMap || (tileset ? 'photoreal' : 'esri-imagery'),
+    {
+      silent: true,
+    },
+  );
 
   signal.throwIfAborted();
   return { viewer, tileset, mapStackController, operations };

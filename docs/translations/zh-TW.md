@@ -2,7 +2,7 @@
 
 Catalog: `src/i18n/locales/zh-TW.json`. General rules: [TRANSLATORS.md](../TRANSLATORS.md).
 
-This first phase supplies all 2,727 currently marked messages (including 69 plural entries), because the catalog gate requires complete coverage. Main menus, first launch, settings, map/layer controls, panels, hints and errors are the priority review surface. The existing `zh-CN` catalog is unchanged. Its translations by abiyeenzo (#914) and EDIT-Aeterna (#979) provided the base; an OpenCC 0.1.7 `s2twp` authoring conversion was followed by Taiwanese terminology and priority UI revisions. OpenCC is not a runtime or project dependency. Specialized aviation, maritime, SDR and weather wording remains appropriate for further native domain review; catalog completeness does not imply exhaustive linguistic or visual sign-off.
+This first phase supplies all 2,727 initially marked messages (including 69 plural entries), because the catalog gate requires complete coverage. Main menus, first launch, settings, map/layer controls, panels, hints and errors are the priority review surface. The existing `zh-CN` catalog is unchanged. Its translations by abiyeenzo (#914) and EDIT-Aeterna (#979) provided the base; an OpenCC 0.1.7 `s2twp` authoring conversion was followed by Taiwanese terminology and priority UI revisions. OpenCC is not a runtime or project dependency. Specialized aviation, maritime, SDR and weather wording remains appropriate for further native domain review; catalog completeness does not imply exhaustive linguistic or visual sign-off.
 
 ## Locale selection and fallback
 
@@ -55,3 +55,5 @@ Layer IDs, share-link parameters, API/schema fields, feed records (callsigns, ve
 Run `npm run i18n`, the `src/i18n/zh-TW.test.mjs` tests, the existing picker/reload tests, the full unit suite, package boundaries and build. Check `?lang=zh-TW` and `?lang=zh-Hant`, picker persistence after reload, English switching, first-launch/settings/layer panels and narrow layouts. Compare the existing English, Spanish, Russian and Simplified catalogs against the base branch; do not change them to accommodate the new locale.
 
 For Windows 11 manual review, use the [one-click launcher and acceptance checklist](zh-TW-windows-acceptance.md). Native-input and resize/reload acceptance remains pending until it is checked in Firefox and Edge on Windows.
+
+The basemap follow-up adds three messages (2,730 total), with English and all shipped catalogs retained. See [basemap recovery and Windows Edge acceptance](zh-TW-basemap-acceptance.md).

@@ -1127,3 +1127,21 @@ html:not([lang='en']) .param-slider-row {
   flex: 1;
   min-width: 0;
 }
+
+/* Persistent failure notice stays beside the existing basemap choices. */
+.map-source-error {
+  flex-basis: 100%;
+  max-width: 100%;
+  color: #ffc66d;
+  overflow-wrap: anywhere;
+}
+.map-source-error[hidden] {
+  display: none;
+}
+.map-source-error p {
+  margin: 6px 0;
+}
+.map-source-error .map-stack-chip {
+  white-space: normal;
+  text-align: start;
+}

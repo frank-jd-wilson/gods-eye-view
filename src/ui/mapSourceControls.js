@@ -1,5 +1,6 @@
 import { renderMapStackChips, syncMapStackChips } from '../mapStackChips.js';
-import { t } from '../i18n/index.js';
+import { t, translateKnown } from '../i18n/index.js';
+import { saveMapPreference } from '../maps/preference.js';
 
 /**
  * Own Map Source presentation and selection without constructing map providers.
@@ -13,9 +14,12 @@ export function createMapSourceControls({
   claimSelection = () => {},
   onStateChanged = () => {},
   onError = () => {},
+  storage,
 }) {
   let destroyed = false;
   let generation = 0;
+  let announcedFailure = null;
+  let notice, noticeText, recoveryButton;
   const removers = [];
   const bind = (element, type, listener) => {
     element.addEventListener(type, listener);
@@ -24,6 +28,23 @@ export function createMapSourceControls({
   function render(state) {
     if (destroyed || !state) return;
     syncMapStackChips(container, state.activeId);
+    if (state.imagerySuspended && state.lastError !== announcedFailure) {
+      announcedFailure = state.lastError;
+      onError(translateKnown(state.lastError));
+    } else if (!state.imagerySuspended) {
+      announcedFailure = null;
+    }
+    if (notice) {
+      notice.hidden = !state.imagerySuspended;
+      noticeText.textContent = state.imagerySuspended
+        ? translateKnown(state.lastError)
+        : '';
+      recoveryButton.disabled =
+        state.status === 'switching' ||
+        !controller
+          .getStacks()
+          .some((s) => s.id === 'esri-imagery' && s.available !== false);
+    }
     if (statusElement) {
       const stack = state.activeStack;
       statusElement.textContent =
@@ -41,7 +62,7 @@ export function createMapSourceControls({
     render(controller.getState('switching'));
     let state;
     try {
-      state = await controller.setStack(stackId);
+      state = await controller.setStack(stackId, { retry: syncShare });
     } catch (error) {
       if (!destroyed && current === generation) {
         render(controller.getState());
@@ -54,6 +75,13 @@ export function createMapSourceControls({
     if (state?.activeId === before && stackId !== before && state?.lastError)
       onError(state.lastError);
     if (syncShare) onStateChanged();
+    if (
+      syncShare &&
+      state?.activeId === stackId &&
+      !state.lastError &&
+      !saveMapPreference(stackId, storage)
+    )
+      onError(t('The basemap preference could not be saved in this browser.'));
     return state;
   }
   function refresh() {
@@ -66,6 +94,23 @@ export function createMapSourceControls({
       },
       bind,
     });
+    const doc = container?.ownerDocument;
+    if (doc) {
+      notice = doc.createElement('div');
+      notice.className = 'map-source-error';
+      notice.setAttribute('role', 'status');
+      noticeText = doc.createElement('p');
+      recoveryButton = doc.createElement('button');
+      recoveryButton.type = 'button';
+      recoveryButton.className = 'map-stack-chip';
+      recoveryButton.textContent = t('Switch to Esri satellite imagery');
+      bind(recoveryButton, 'click', () => {
+        void select('esri-imagery').catch(() => {});
+      });
+      notice.appendChild(noticeText);
+      notice.appendChild(recoveryButton);
+      container.appendChild(notice);
+    }
     render(controller.getState());
   }
   const unsubscribe = subscribe(() => {

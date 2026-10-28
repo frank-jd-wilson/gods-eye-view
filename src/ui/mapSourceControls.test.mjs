@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMapSourceControls } from './mapSourceControls.js';
+import { MAP_PREFERENCE_KEY } from '../maps/preference.js';
+import { setLocale } from '../i18n/index.js';
 
 function makeElement(tagName = 'div') {
   const element = {
@@ -62,6 +64,12 @@ function makeElement(tagName = 'div') {
 }
 
 function fixture() {
+  const values = new Map();
+  const storage = {
+    getItem: (k) => values.get(k),
+    setItem: (k, v) => values.set(k, v),
+    removeItem: (k) => values.delete(k),
+  };
   const container = makeElement();
   container.ownerDocument = { createElement: (tag) => makeElement(tag) };
   const statusElement = makeElement();
@@ -94,6 +102,7 @@ function fixture() {
     container,
     statusElement,
     controller,
+    storage,
     subscribe: (listener) => {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -104,12 +113,13 @@ function fixture() {
   });
   const chip = (id) =>
     container.children.find((el) => el.dataset.stackId === id);
-  function change(id, lastError = null) {
+  function change(id, lastError = null, imagerySuspended = false) {
     state = {
       activeId: id,
       activeStack: sources.find((source) => source.id === id),
       status: 'ready',
       lastError,
+      imagerySuspended,
     };
     return controller.getState();
   }
@@ -117,6 +127,8 @@ function fixture() {
     for (const listener of listeners) listener();
   };
   return {
+    values,
+    storage,
     container,
     statusElement,
     controller,
@@ -249,4 +261,77 @@ test('completion after destruction cannot paint or notify', async () => {
   assert.equal(f.calls.length, count);
   assert.equal(f.statusElement.textContent, label);
   assert.equal(await f.controls.select('osm'), null);
+});
+
+test('only successful manual selections persist; share restoration and fallback do not overwrite preference', async () => {
+  const f = fixture();
+  let pending = f.controls.select('esri-imagery');
+  f.requests.at(-1).resolve(f.change('esri-imagery'));
+  await pending;
+  assert.equal(f.values.get(MAP_PREFERENCE_KEY), 'esri-imagery');
+  pending = f.controls.select('osm', { syncShare: false });
+  f.requests.at(-1).resolve(f.change('osm'));
+  await pending;
+  assert.equal(f.values.get(MAP_PREFERENCE_KEY), 'esri-imagery');
+  pending = f.controls.select('esri-imagery');
+  f.requests.at(-1).resolve(f.change('osm', 'Esri unavailable'));
+  await pending;
+  assert.equal(f.values.get(MAP_PREFERENCE_KEY), 'esri-imagery');
+  f.controls.destroy();
+});
+
+test('OSM failure notice and its real selection action work in English and Taiwanese Chinese', async () => {
+  const source =
+    'OpenStreetMap tiles could not be loaded. Requests are paused; choose another basemap or select OSM to retry.';
+  try {
+    for (const locale of ['en', 'zh-TW']) {
+      setLocale(locale);
+      const f = fixture();
+      f.change('osm', source, true);
+      f.emit();
+      const notice = f.container.children.find(
+        (e) => e.className === 'map-source-error',
+      );
+      assert.equal(notice.hidden, false);
+      assert.match(
+        notice.children[0].textContent,
+        locale === 'en' ? /Requests are paused/ : /已暫停請求/,
+      );
+      assert.equal(
+        notice.children[1].textContent,
+        locale === 'en'
+          ? 'Switch to Esri satellite imagery'
+          : '切換至 Esri 衛星影像',
+      );
+      notice.children[1].click();
+      assert.equal(f.requests.at(-1).id, 'esri-imagery');
+      f.requests.at(-1).resolve(f.change('esri-imagery'));
+      await Promise.resolve();
+      await Promise.resolve();
+      assert.equal(f.values.get(MAP_PREFERENCE_KEY), 'esri-imagery');
+      f.emit();
+      assert.equal(notice.hidden, true);
+      f.controls.destroy();
+    }
+  } finally {
+    setLocale('en');
+  }
+});
+
+test('blocked preference storage reports failure without preventing a successful map switch', async () => {
+  const f = fixture();
+  f.storage.setItem = () => {
+    throw new Error('storage denied');
+  };
+  const pending = f.controls.select('esri-imagery');
+  f.requests.at(-1).resolve(f.change('esri-imagery'));
+  await pending;
+  assert.equal(f.controller.getActiveId(), 'esri-imagery');
+  assert.ok(
+    f.calls.some(
+      ([type, message]) =>
+        type === 'error' && /preference could not be saved/.test(message),
+    ),
+  );
+  f.controls.destroy();
 });
