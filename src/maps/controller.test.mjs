@@ -1,4 +1,5 @@
 import test from 'node:test';
+import * as Cesium from 'cesium';
 import assert from 'node:assert/strict';
 import { MapSourceController } from './controller.js';
 import { createDefaultMapSources } from './defaultSources.js';
@@ -12,6 +13,9 @@ function event() {
     },
     raise(value = {}) {
       for (const fn of [...listeners]) fn(value);
+    },
+    get callbacks() {
+      return [...listeners];
     },
     get size() {
       return listeners.size;
@@ -1471,4 +1475,117 @@ test('Esri service credit is displayed with Powered by Esri and removed when OSM
     'service credit follows the visible source',
   );
   env.controller.destroy();
+});
+
+test('pending OSM requests time out after 15 seconds, notify once, and survive a repeated activation', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const osm = env.providers.get('osm');
+  const hung = deferred();
+  osm.requestImage = () => hung.promise;
+  await env.controller.setStack('osm');
+  assert.equal(
+    osm.requestImage(0, 0, 0),
+    hung.promise,
+    'promise identity preserved',
+  );
+  osm.requestImage(1, 0, 0);
+  t.mock.timers.tick(10_000);
+  await env.controller.setStack('osm', { silent: true });
+  t.mock.timers.tick(4_999);
+  assert.equal(env.controller.getState().imagerySuspended, false);
+  t.mock.timers.tick(1);
+  assert.equal(env.controller.getState().imagerySuspended, true);
+  const errors = env.changes.filter((s) => s.status === 'error').length;
+  assert.equal(errors, 1);
+  for (let i = 0; i < 10; i++) osm.errorEvent.raise({ retry: true });
+  t.mock.timers.tick(60_000);
+  hung.resolve({});
+  await settle();
+  assert.equal(env.changes.filter((s) => s.status === 'error').length, 1);
+  env.controller.destroy();
+});
+
+test('switching to Esri cancels the watchdog and ignores late OSM promises and queued error callbacks', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const osm = env.providers.get('osm');
+  let reject;
+  const pending = new Promise((_, r) => (reject = r));
+  const original = () => pending;
+  osm.requestImage = original;
+  await env.controller.setStack('osm');
+  osm.requestImage(0, 0, 0);
+  const callbacks = osm.errorEvent.callbacks;
+  await env.controller.setStack('esri-imagery');
+  assert.equal(osm.requestImage, original, 'instance observer removed');
+  reject(new Error('ERR_CONNECTION_TIMED_OUT'));
+  await settle();
+  callbacks.forEach((fn) => fn({ retry: true }));
+  t.mock.timers.tick(60_000);
+  assert.equal(env.controller.getActiveId(), 'esri-imagery');
+  assert.equal(env.controller.getState().imagerySuspended, false);
+  assert.equal(env.controller.getState().lastError, null);
+  assert.equal(env.changes.filter((s) => s.status === 'error').length, 0);
+  env.controller.destroy();
+});
+
+test('actual promise failure and multiple provider errors produce a single OSM failure episode', async () => {
+  const env = publicFixture();
+  const osm = env.providers.get('osm');
+  osm.requestImage = () =>
+    Promise.reject(new Error('ERR_CONNECTION_TIMED_OUT'));
+  await env.controller.setStack('osm');
+  await assert.rejects(osm.requestImage(0, 0, 0));
+  await settle();
+  assert.equal(env.controller.getState().imagerySuspended, true);
+  for (let i = 0; i < 12; i++) osm.errorEvent.raise({ retry: true });
+  assert.equal(env.changes.filter((s) => s.status === 'error').length, 1);
+  await env.controller.setStack('esri-imagery');
+  assert.equal(env.controller.getState().lastError, null);
+  env.controller.destroy();
+});
+
+test('throttled requests and scheduler cancellation are not reported as a network failure', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const osm = env.providers.get('osm');
+  let result;
+  osm.requestImage = () => result;
+  await env.controller.setStack('osm');
+  assert.equal(osm.requestImage(0, 0, 0), undefined);
+  t.mock.timers.tick(20_000);
+  assert.equal(env.controller.getState().imagerySuspended, false);
+  result = Promise.reject(new Error('cancelled'));
+  await assert.rejects(
+    osm.requestImage(0, 0, 0, { state: Cesium.RequestState.CANCELLED }),
+  );
+  t.mock.timers.tick(20_000);
+  assert.equal(env.controller.getState().imagerySuspended, false);
+  env.controller.destroy();
+});
+
+test('successful tile progress restarts the inactivity deadline; destroy cleans pending monitoring', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const env = publicFixture();
+  const osm = env.providers.get('osm');
+  const first = deferred(),
+    second = deferred();
+  let i = 0;
+  const original = () => (i++ ? second.promise : first.promise);
+  osm.requestImage = original;
+  await env.controller.setStack('osm');
+  osm.requestImage(0, 0, 0);
+  osm.requestImage(1, 0, 0);
+  t.mock.timers.tick(10_000);
+  first.resolve({});
+  await settle();
+  t.mock.timers.tick(14_999);
+  assert.equal(env.controller.getState().imagerySuspended, false);
+  env.controller.destroy();
+  assert.equal(osm.requestImage, original);
+  t.mock.timers.tick(60_000);
+  second.resolve({});
+  await settle();
+  assert.equal(env.changes.filter((s) => s.status === 'error').length, 0);
 });

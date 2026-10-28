@@ -61,7 +61,8 @@ export function createDefaultMapSources({
         ...(descriptor.id === 'osm'
           ? {
               tileFailureStop: {
-                threshold: 2,
+                threshold: 1,
+                timeoutMs: 15_000,
                 message: msg(
                   'OpenStreetMap tiles could not be loaded. Requests are paused; choose another basemap or select OSM to retry.',
                 ),

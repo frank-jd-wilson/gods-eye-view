@@ -28,16 +28,22 @@ export function createMapSourceControls({
   function render(state) {
     if (destroyed || !state) return;
     syncMapStackChips(container, state.activeId);
-    if (state.imagerySuspended && state.lastError !== announcedFailure) {
+    if (
+      state.imagerySuspended &&
+      state.lastError &&
+      state.lastError !== announcedFailure
+    ) {
       announcedFailure = state.lastError;
-      onError(translateKnown(state.lastError));
+      // The floating notice is already visible; do not duplicate it as a toast.
+      if (!container?.ownerDocument?.body)
+        onError(translateKnown(state.lastError));
     } else if (!state.imagerySuspended) {
       announcedFailure = null;
     }
     if (notice) {
       notice.hidden = !state.imagerySuspended;
       noticeText.textContent = state.imagerySuspended
-        ? translateKnown(state.lastError)
+        ? translateKnown(state.lastError || announcedFailure)
         : '';
       recoveryButton.disabled =
         state.status === 'switching' ||
@@ -87,6 +93,7 @@ export function createMapSourceControls({
   function refresh() {
     if (destroyed) return;
     for (const remove of removers.splice(0)) remove();
+    notice?.remove?.();
     renderMapStackChips(container, controller.getStacks(), {
       activeId: controller.getActiveId(),
       onSelect: (id) => {
@@ -98,6 +105,7 @@ export function createMapSourceControls({
     if (doc) {
       notice = doc.createElement('div');
       notice.className = 'map-source-error';
+      notice.classList.toggle('map-source-error-floating', Boolean(doc.body));
       notice.setAttribute('role', 'status');
       noticeText = doc.createElement('p');
       recoveryButton = doc.createElement('button');
@@ -109,7 +117,8 @@ export function createMapSourceControls({
       });
       notice.appendChild(noticeText);
       notice.appendChild(recoveryButton);
-      container.appendChild(notice);
+      // Keep the action reachable even while Visual Presets is collapsed.
+      (doc.body || container).appendChild(notice);
     }
     render(controller.getState());
   }
@@ -128,6 +137,7 @@ export function createMapSourceControls({
       destroyed = true;
       generation++;
       unsubscribe?.();
+      notice?.remove?.();
       for (const remove of removers.splice(0)) remove();
     },
   };

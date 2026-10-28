@@ -60,6 +60,7 @@ export class MapSourceController {
     this._activeImageryProvider = null;
     this._activeResolution = null;
     this._removeImageryErrorListener = null;
+    this._refreshImageryWatch = null;
     this._terrainMode = null;
     this._terrainFallback = null;
     this._retryTimer = null;
@@ -331,9 +332,13 @@ export class MapSourceController {
     );
     // A repeated request still owns a new switch generation. Rebind its
     // failure listener so fallback remains live without accumulating listeners.
-    this._removeImageryErrorListener?.();
-    this._removeImageryErrorListener = null;
-    this._watchProvider(resolution, gen);
+    if (source?.tileFailureStop && this._refreshImageryWatch) {
+      this._refreshImageryWatch(gen);
+    } else {
+      this._removeImageryErrorListener?.();
+      this._removeImageryErrorListener = null;
+      this._watchProvider(resolution, gen);
+    }
     this._showTileset(null);
     this.viewer.scene.globe.show = true;
     this._activeId = resolution.effectiveStackId;
@@ -558,12 +563,68 @@ export class MapSourceController {
     if ((!fallback && !stop) || !errorEvent?.addEventListener) return;
     let failures = 0;
     let pending = false;
-    this._removeImageryErrorListener = errorEvent.addEventListener((error) => {
-      if (
-        gen !== this._switchGen ||
-        this._activeImageryProvider !== resolution.provider
-      )
-        return;
+    let disposed = false;
+    let watchGeneration = gen;
+    let watchdog = null;
+    let inFlight = 0;
+    const provider = resolution.provider;
+    const current = () =>
+      !disposed &&
+      !this._destroyed &&
+      watchGeneration === this._switchGen &&
+      this._activeImageryProvider === provider;
+    const pause = () => {
+      if (!current() || this._imagerySuspended) return;
+      clearTimeout(watchdog);
+      this._imagerySuspended = true;
+      this._imageryLayer.show = false;
+      this._lastError = stop.message;
+      this._onError?.(stop.message, this.getStack(resolution.effectiveStackId));
+      this._emitChange('error');
+      this._requestRender('map-stack');
+    };
+    const armWatchdog = () => {
+      clearTimeout(watchdog);
+      if (stop?.timeoutMs && inFlight && current() && !this._imagerySuspended)
+        watchdog = setTimeout(pause, stop.timeoutMs);
+    };
+    // Observe the public provider method, leaving Cesium's request scheduling,
+    // promise identity and cancellation intact. errorEvent alone cannot detect
+    // a connection that remains pending until the browser's own long timeout.
+    const originalRequest = provider.requestImage;
+    const thisController = this;
+    let watchedRequest;
+    if (stop && typeof originalRequest === 'function') {
+      watchedRequest = function (...args) {
+        const result = originalRequest.apply(this, args);
+        if (!result?.then || !current() || thisController._imagerySuspended)
+          return result;
+        if (++inFlight === 1) armWatchdog();
+        Promise.resolve(result).then(
+          () => {
+            inFlight--;
+            if (current()) armWatchdog();
+          },
+          () => {
+            inFlight--;
+            if (!current()) return;
+            if (args[3]?.state === Cesium.RequestState.CANCELLED) {
+              if (!inFlight) clearTimeout(watchdog);
+              return;
+            }
+            pause();
+          },
+        );
+        return result;
+      };
+      provider.requestImage = watchedRequest;
+    }
+    if (stop)
+      this._refreshImageryWatch = (generation) => {
+        watchGeneration = generation;
+      };
+    const removeError = errorEvent.addEventListener((error) => {
+      if (!current()) return;
       // Never ask Cesium to retry a failed tile indefinitely.
       error.retry = false;
       if (this._imagerySuspended) return;
@@ -574,15 +635,7 @@ export class MapSourceController {
           : failures + 1;
       if (failures < (stop || fallback).threshold || pending) return;
       if (stop) {
-        this._imagerySuspended = true;
-        this._imageryLayer.show = false;
-        this._lastError = stop.message;
-        this._onError?.(
-          stop.message,
-          this.getStack(resolution.effectiveStackId),
-        );
-        this._emitChange('error');
-        this._requestRender('map-stack');
+        pause();
         return;
       }
       pending = true;
@@ -606,6 +659,14 @@ export class MapSourceController {
           pending = false;
         });
     });
+    this._removeImageryErrorListener = () => {
+      disposed = true;
+      this._refreshImageryWatch = null;
+      clearTimeout(watchdog);
+      removeError();
+      if (watchedRequest && provider.requestImage === watchedRequest)
+        provider.requestImage = originalRequest;
+    };
   }
 
   _removeImageryLayer() {
