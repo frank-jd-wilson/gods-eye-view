@@ -53,3 +53,5 @@ Layer IDs, share-link parameters, API/schema fields, feed records (callsigns, ve
 ## Verification
 
 Run `npm run i18n`, the `src/i18n/zh-TW.test.mjs` tests, the existing picker/reload tests, the full unit suite, package boundaries and build. Check `?lang=zh-TW` and `?lang=zh-Hant`, picker persistence after reload, English switching, first-launch/settings/layer panels and narrow layouts. Compare the existing English, Spanish, Russian and Simplified catalogs against the base branch; do not change them to accommodate the new locale.
+
+For Windows 11 manual review, use the [one-click launcher and acceptance checklist](zh-TW-windows-acceptance.md). Native-input and resize/reload acceptance remains pending until it is checked in Firefox and Edge on Windows.

@@ -12,6 +12,9 @@
 # Shell launchers must stay LF to run at all.
 *.sh text eol=lf
 
+# Preserve CRLF in the downloadable Windows launcher, including GitHub Raw.
+scripts/windows/start-zh-tw-acceptance.bat -text whitespace=cr-at-eol
+
 # Assets Git must never rewrite.
 *.gif binary
 *.png binary
