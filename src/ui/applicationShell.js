@@ -46,11 +46,15 @@ import {
   describeUnsavedWork,
   getLocale,
   msg,
-  persistLocaleAndReload,
+  persistLocaleChoice,
   registerUnsavedWork,
   t,
 } from '../i18n/index.js';
-import { applyLocaleChoice, mountLocalePicker } from './localePicker.js';
+import {
+  applyLocaleChoice,
+  mountLocalePicker,
+  mountBrandTitle,
+} from './localePicker.js';
 
 /**
  * Central UI orchestrator for the God's Eye View application.
@@ -738,8 +742,8 @@ export class StyleManager extends ShellFacade {
   }
 
   /**
-   * Mounts the language picker (src/ui/localePicker.js). A choice reloads the
-   * page; _confirmLocaleReload asks first when that would lose work.
+   * Mounts the picker and the phase-one live brand subscription. Other UI
+   * labels adopt the saved preference on the next page load.
    * @returns {void}
    */
   _initLocaleSelector() {
@@ -757,8 +761,17 @@ export class StyleManager extends ShellFacade {
         this.cockpitView?.active ? msg('the open cockpit') : null,
       ),
     ];
+    this._unmountBrandTitle?.();
+    this._unmountBrandTitle = mountBrandTitle(
+      globalThis.document?.getElementById?.('app-brand-title'),
+    );
+    this._mountLocalePicker();
+  }
+
+  _mountLocalePicker() {
     const root = globalThis.document?.getElementById?.('locale-picker');
     if (!root) return;
+    this._localePicker?.destroy();
     this._localePicker = mountLocalePicker({
       root,
       current: getLocale(),
@@ -768,15 +781,18 @@ export class StyleManager extends ShellFacade {
 
   /**
    * Switch to `locale`: nothing for the active language, otherwise store it
-   * and reload once _confirmLocaleReload agrees.
+   * and notify live consumers without navigating or discarding work.
    * @param {string} locale
    * @returns {'unchanged'|'declined'|'switched'}
    */
   _chooseLocale(locale) {
     return applyLocaleChoice(locale, {
       current: getLocale(),
-      confirmSwitch: () => this._confirmLocaleReload(),
-      switchLocale: (next) => persistLocaleAndReload(next),
+      confirmSwitch: () => true,
+      switchLocale: (next) => {
+        persistLocaleChoice(next);
+        this._mountLocalePicker();
+      },
     });
   }
 
@@ -1793,6 +1809,8 @@ export class StyleManager extends ShellFacade {
       unregister();
     this._localePicker?.destroy();
     this._localePicker = null;
+    this._unmountBrandTitle?.();
+    this._unmountBrandTitle = null;
     this._recording.destroy();
     this._mobileShell?.destroy();
     this._panelChrome.destroy();

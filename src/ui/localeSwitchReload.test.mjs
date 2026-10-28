@@ -1,6 +1,5 @@
-// The language picker reloads the page, so it asks first while the
-// reload would lose work (unsaved CCTV calibration, the open cockpit, anything
-// a module registers). Choosing the language already active does nothing.
+// Phase-one language choice updates the live brand without navigating.
+// Unsaved work remains owned by the same application instance.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { StyleManager } from './applicationShell.js';
@@ -9,6 +8,8 @@ import {
   msg,
   registerUnsavedWork,
   setLocale,
+  getLocale,
+  t,
 } from '../i18n/index.js';
 
 /** Wire the shell's language choice with the given shell state. No picker
@@ -43,6 +44,7 @@ function renderSwitch({ calDirty = false, cockpit = false } = {}) {
     cockpitView: { active: cockpit },
     _confirmLocaleReload: StyleManager.prototype._confirmLocaleReload,
     _chooseLocale: StyleManager.prototype._chooseLocale,
+    _mountLocalePicker: StyleManager.prototype._mountLocalePicker,
   };
   StyleManager.prototype._initLocaleSelector.call(shell);
   return {
@@ -57,6 +59,8 @@ function renderSwitch({ calDirty = false, cockpit = false } = {}) {
   };
 }
 
+test.beforeEach(() => setLocale('en'));
+test.afterEach(() => setLocale('en'));
 const storage = globalThis.localStorage;
 test.before(() => {
   globalThis.localStorage = { setItem() {}, getItem: () => null };
@@ -65,29 +69,29 @@ test.after(() => {
   globalThis.localStorage = storage;
 });
 
-test('nothing to lose: the switch reloads without asking', () => {
+test('language choice updates locale without asking or reloading', () => {
   const view = renderSwitch();
   try {
     view.choose('es');
     assert.deepEqual(view.prompts, []);
-    assert.equal(view.reloads.length, 1);
+    assert.equal(view.reloads.length, 0);
+    assert.equal(getLocale(), 'es');
   } finally {
     view.restore();
   }
 });
 
-test('unsaved calibration or the open cockpit: the switch asks first', () => {
+test('unsaved calibration and cockpit remain in place without a reload prompt', () => {
   const view = renderSwitch({ calDirty: true, cockpit: true });
   try {
     view.answer(false);
     view.choose('ru');
-    assert.equal(view.prompts.length, 1);
-    assert.match(view.prompts[0], /unsaved CCTV calibration/);
-    assert.match(view.prompts[0], /the open cockpit/);
+    assert.deepEqual(view.prompts, []);
+    assert.equal(getLocale(), 'ru');
     assert.equal(view.reloads.length, 0, 'declined: no reload');
     view.answer(true);
     view.choose('ru');
-    assert.equal(view.reloads.length, 1, 'confirmed: reload');
+    assert.equal(view.reloads.length, 0, 'live switch preserves the page');
   } finally {
     view.restore();
   }
@@ -102,7 +106,8 @@ test('modules register their own unsaved work', () => {
   try {
     view.answer(false);
     view.choose('es');
-    assert.match(view.prompts[0], /drawings on the map/);
+    assert.deepEqual(view.prompts, []);
+    assert.ok(describeUnsavedWork().includes(t('drawings on the map')));
     assert.equal(view.reloads.length, 0);
   } finally {
     view.restore();
@@ -112,14 +117,15 @@ test('modules register their own unsaved work', () => {
   assert.deepEqual(describeUnsavedWork(), []);
 });
 
-test('the prompt reads in the active language', () => {
+test('switching from a non-English locale still does not prompt or reload', () => {
   setLocale('es');
   const view = renderSwitch({ calDirty: true });
   try {
     view.answer(false);
     view.choose('en');
-    assert.equal(view.prompts.length, 1);
-    assert.doesNotMatch(view.prompts[0], /Switching language/);
+    assert.deepEqual(view.prompts, []);
+    assert.equal(getLocale(), 'en');
+    assert.equal(view.reloads.length, 0);
   } finally {
     view.restore();
     setLocale('en');
