@@ -2866,5 +2866,7 @@
   "S2 Underground publishes these KMZ products to GitHub. New uploads are detected within seconds and replace the previous edition automatically. Click a marker for its report.": "S2 Underground 在 GitHub 发布这些 KMZ 产品。新上传的内容会在数秒内被检测到，并自动替换旧版本。点击标记查看报告。",
   "OpenStreetMap tiles could not be loaded. Requests are paused; choose another basemap or select OSM to retry.": "无法加载 OpenStreetMap 瓦片。请求已暂停；请选择其他底图，或选择 OSM 重试。",
   "Switch to Esri satellite imagery": "切换至 Esri 卫星影像",
-  "The basemap preference could not be saved in this browser.": "无法在此浏览器中保存底图偏好设置。"
+  "The basemap preference could not be saved in this browser.": "无法在此浏览器中保存底图偏好设置。",
+  "Digital Twin {earth}": "Digital Twin {earth}",
+  "app-brand|Earth": "Earth"
 }

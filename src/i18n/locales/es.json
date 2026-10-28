@@ -3004,5 +3004,7 @@
   "Automatic stop is unavailable for this voice connection.": "La parada automática no está disponible para esta conexión de voz.",
   "OpenStreetMap tiles could not be loaded. Requests are paused; choose another basemap or select OSM to retry.": "No se pudieron cargar las teselas de OpenStreetMap. Las solicitudes están en pausa; elige otro mapa base o selecciona OSM para reintentar.",
   "Switch to Esri satellite imagery": "Cambiar a imágenes de satélite de Esri",
-  "The basemap preference could not be saved in this browser.": "No se pudo guardar la preferencia del mapa base en este navegador."
+  "The basemap preference could not be saved in this browser.": "No se pudo guardar la preferencia del mapa base en este navegador.",
+  "Digital Twin {earth}": "Digital Twin {earth}",
+  "app-brand|Earth": "Earth"
 }

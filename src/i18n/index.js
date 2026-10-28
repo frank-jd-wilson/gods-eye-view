@@ -15,6 +15,7 @@ import {
   DEFAULT_LOCALE,
   normalizeLocale,
   writeStoredLocale,
+  applyDocumentLanguage,
 } from './locale.js';
 import es from './locales/es.json' with { type: 'json' };
 import ru from './locales/ru.json' with { type: 'json' };
@@ -24,6 +25,13 @@ import zhTW from './locales/zh-TW.json' with { type: 'json' };
 const CATALOGS = Object.freeze({ es, ru, 'zh-CN': zhCN, 'zh-TW': zhTW });
 
 let currentLocale = DEFAULT_LOCALE;
+const localeListeners = new Set();
+
+/** Subscribe to the existing locale state; callers own their disposer. */
+export function subscribeLocale(listener) {
+  localeListeners.add(listener);
+  return () => localeListeners.delete(listener);
+}
 
 /** The catalog for a locale; null for English and unknown codes. */
 export function getCatalog(locale) {
@@ -36,8 +44,8 @@ export function getLocale() {
 }
 
 /**
- * Switch the active locale. Pure state change: call applyDocumentLanguage /
- * applyDocumentTranslations to reflect it in the DOM.
+ * Switch the active locale and notify subscribed live consumers. Other DOM
+ * translations still require explicit application by their owners.
  * @returns {string} The locale actually applied (normalized).
  */
 export function setLocale(locale) {
@@ -45,6 +53,15 @@ export function setLocale(locale) {
   if (normalized !== currentLocale) {
     currentLocale = normalized;
     formatterCache.clear();
+    for (const listener of [...localeListeners]) {
+      if (currentLocale !== normalized) break;
+      if (!localeListeners.has(listener)) continue;
+      try {
+        listener(normalized);
+      } catch (error) {
+        console.warn('[i18n] locale subscriber failed', error);
+      }
+    }
   }
   return currentLocale;
 }
@@ -231,8 +248,8 @@ const DOCUMENT_TRANSLATION_TARGETS = Object.freeze([
 ]);
 
 /**
- * Translate every opted-in element in `doc`. Runs once at boot; switching
- * locale reloads the page.
+ * Translate every opted-in element in `doc` at boot. Phase-one live switching
+ * updates subscribed consumers only; this is not a full UI retranslation.
  * @param {Document|Element} doc
  * @returns {number} Count of element/attribute writes performed.
  */
@@ -286,6 +303,32 @@ export function describeUnsavedWork() {
     }
   }
   return [...labels];
+}
+
+/** Save the existing preference and notify live consumers without navigation.
+ * Unmigrated UI keeps its current labels until the next page load. */
+export function persistLocaleChoice(
+  locale,
+  {
+    location = globalThis.location,
+    history = globalThis.history,
+    storage,
+    document = globalThis.document,
+  } = {},
+) {
+  const normalized = normalizeLocale(locale) || DEFAULT_LOCALE;
+  const stored = writeStoredLocale(normalized, storage);
+  try {
+    const target = new URL(location.href);
+    if (stored) target.searchParams.delete('lang');
+    else target.searchParams.set('lang', normalized);
+    history?.replaceState?.(null, '', target.href);
+  } catch {
+    /* Preference and in-page switch remain usable without history. */
+  }
+  applyDocumentLanguage(document, normalized);
+  setLocale(normalized);
+  return stored;
 }
 
 /**

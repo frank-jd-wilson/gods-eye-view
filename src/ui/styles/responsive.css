@@ -281,3 +281,9 @@
     display: none;
   }
 }
+
+/* CJK has no Latin tracking requirement; keep the HUD font and accent. */
+#app-brand-title:lang(zh-TW) {
+  letter-spacing: 0.12em;
+  font-variant-ligatures: none;
+}

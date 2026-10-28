@@ -122,7 +122,9 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "Digital Twin {earth}",
+    "app-brand|Earth"
   ],
   "ru": [
     "AIS: --",
@@ -140,7 +142,9 @@
     "S2 GhostMaps",
     "S2 · {name}",
     "VS",
-    "WHOT/BHOT"
+    "WHOT/BHOT",
+    "Digital Twin {earth}",
+    "app-brand|Earth"
   ],
   "zh-CN": [
     "1090 MHz",
@@ -197,7 +201,9 @@
     "{value} KM/S",
     "ΔE",
     "ΔN",
-    "▲ {frp} MW"
+    "▲ {frp} MW",
+    "Digital Twin {earth}",
+    "app-brand|Earth"
   ],
   "zh-TW": [
     "1090 MHz",

@@ -2,8 +2,8 @@
  * Interface language picker: a HUD button in the bottom-right corner that
  * opens a listbox of the shipped languages.
  *
- * The logic is pure and DOM-free; mountLocalePicker() only renders it. The
- * shell decides what a choice does (confirm, reload).
+ * The model is pure and DOM-free; mountLocalePicker() renders the selector.
+ * The shell owns preference persistence and the phase-one live switch.
  *
  * The list follows the ARIA listbox pattern: the button opens it, focus moves
  * into the list (or into the search field, which is a combobox, once there are
@@ -11,7 +11,7 @@
  * marks the active option.
  */
 
-import { t } from '../i18n/index.js';
+import { t, subscribeLocale } from '../i18n/index.js';
 import { LOCALES, LOCALE_NAMES } from '../i18n/locale.js';
 
 /** Above this many languages the list gets a search field. */
@@ -626,4 +626,23 @@ export function mountLocalePicker({
       root.textContent = '';
     },
   };
+}
+
+/** Update only the brand's text nodes, preserving the existing logo/accent. */
+export function mountBrandTitle(root) {
+  if (!root) return () => {};
+  const accent = root.querySelector('.title-accent');
+  if (!accent) return () => {};
+  const prefix = root.ownerDocument.createTextNode('');
+  const suffix = root.ownerDocument.createTextNode('');
+  root.replaceChildren(prefix, accent, suffix);
+  const render = () => {
+    const title = t('Digital Twin {earth}', { earth: '\u0000' });
+    const [before, after = ''] = title.split('\u0000');
+    prefix.nodeValue = before;
+    suffix.nodeValue = after;
+    accent.textContent = t('Earth', { context: 'app-brand' });
+  };
+  render();
+  return subscribeLocale(render);
 }
