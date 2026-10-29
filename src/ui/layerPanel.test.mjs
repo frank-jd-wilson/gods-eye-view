@@ -357,3 +357,92 @@ test('the Weather readout receives enabled air-quality alongside weather layers'
     ],
   );
 });
+
+test('locale events refresh mounted layer rows and groups in place without changing layer data or invoking actions', async () => {
+  const { LayerPanel } = await import('./layerPanel.js');
+  const { railFixture } = await import('./railTestFixture.mjs');
+  const { setLocale, t } = await import('../i18n/index.js');
+  const f = railFixture();
+  const previous = globalThis.document;
+  globalThis.document = f.document;
+  const layers = [
+    {
+      id: 'flights',
+      name: 'Live Flights',
+      enabled: true,
+      showInTogglePanel: true,
+      icon: 'x',
+      source: 'raw-provider',
+      stats: { count: 5 },
+    },
+    {
+      id: 'custom-test',
+      name: 'Live Flights',
+      enabled: false,
+      showInTogglePanel: true,
+      icon: 'x',
+      source: 'raw-provider',
+      stats: {},
+    },
+  ];
+  const before = structuredClone(layers);
+  let actions = 0;
+  const panel = new LayerPanel({
+    getLayers: () => layers,
+    isEnabled: () => true,
+    setEnabled: () => actions++,
+    setLayerParams: () => actions++,
+    hasRowControls: () => false,
+    getRowControls: () => null,
+  });
+  const originalQuery = f.container.querySelector.bind(f.container);
+  f.container.querySelector = (selector) => {
+    const id = selector.match(/^\[data-layer-id="([^"]+)"\]$/)?.[1];
+    return id
+      ? f.find((n) => n.dataset.layerId === id)
+      : originalQuery(selector);
+  };
+  try {
+    setLocale('en');
+    panel.mount(f.container);
+    const row = f.find((n) => n.dataset.layerId === 'flights'),
+      name = row.querySelector('.data-name'),
+      button = row.querySelector('.data-toggle-btn'),
+      heading = f.find((n) => n.className === 'data-layer-group-heading');
+    row.dataset.expanded = 'true';
+    row.scrollTop = 19;
+    for (let i = 0; i < 12; i++) {
+      setLocale('zh-TW');
+      assert.equal(name.textContent, t('Live Flights'));
+      assert.equal(heading.textContent, t('Movement'));
+      setLocale('en');
+      assert.equal(name.textContent, 'Live Flights');
+    }
+    assert.equal(
+      f.find((n) => n.dataset.layerId === 'flights'),
+      row,
+    );
+    assert.equal(row.querySelector('.data-toggle-btn'), button);
+    assert.equal(row.dataset.layerName, 'Live Flights');
+    assert.equal(row.dataset.expanded, 'true');
+    assert.equal(row.scrollTop, 19);
+    setLocale('zh-TW');
+    assert.equal(
+      f
+        .find((n) => n.dataset.layerId === 'custom-test')
+        .querySelector('.data-name').textContent,
+      'Live Flights',
+      'custom raw name is not translated by matching catalog text',
+    );
+    assert.deepEqual(layers, before);
+    assert.equal(actions, 0);
+    const last = name.textContent;
+    panel.destroy();
+    setLocale('en');
+    assert.equal(name.textContent, last);
+  } finally {
+    panel.destroy();
+    setLocale('en');
+    globalThis.document = previous;
+  }
+});

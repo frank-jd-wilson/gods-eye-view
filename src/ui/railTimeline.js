@@ -112,6 +112,13 @@ export function createRailTimeline({
   const update = (nextProps) => {
     if (destroyed) return;
     props = nextProps;
+    set(previous, 'title', t('Earlier observation'));
+    set(next, 'title', t('Later observation'));
+    set(latest, 'textContent', t('Latest'));
+    set(latest, 'title', t('Newest frame per product'));
+    set(play, 'title', t('Replay observed history'));
+    if (slider.getAttribute('aria-label') !== t('Observed history'))
+      slider.setAttribute('aria-label', t('Observed history'));
     if (props.disabled) {
       cancel();
       pending = null;

@@ -8,7 +8,14 @@
  * strip and selection bar are this adapter's own keyed DOM. Source toggles
  * live on the data-panel row.
  */
-import { formatNumber, msg, t, tn, translateKnown } from '../i18n/index.js';
+import {
+  formatNumber,
+  msg,
+  t,
+  tn,
+  translateKnown,
+  subscribeLocale,
+} from '../i18n/index.js';
 import { createRailCardBlocks } from './railCardBlocks.js';
 import { createRailCards } from './railCards.js';
 import { createImagerySplit } from './imagerySplit.js';
@@ -327,7 +334,7 @@ export function createRecentImageryPanel({
   const controls = el('div', 'ri-block ri-controls', root);
   controls.id = 'ri-controls';
   const opacityLabel = el('label', 'ri-opacity-label', controls);
-  el('span', '', opacityLabel, t('OPACITY'));
+  const opacityText = el('span', '', opacityLabel, t('OPACITY'));
   const opacityValue = el('span', 'ri-opacity-value', opacityLabel, '100%');
   const opacity = createSlider({
     documentRef: document,
@@ -1165,6 +1172,39 @@ export function createRecentImageryPanel({
       render();
     }
   });
+  const removeLocale = subscribeLocale(() => {
+    if (destroyed) return;
+    // Snapshot presentation fields are derived in the current locale.
+    snapshot = layer.getSnapshot();
+    // Text-only rendering: no reportVisibleRange, split creation, tool action,
+    // new data request or panel disclosure change on a locale notification.
+    preserveScroll(() => {
+      attribute(root, 'aria-label', t('Recent imagery'));
+      set(zoomIn, 'textContent', t('ZOOM IN'));
+      set(zoomIn, 'title', t('Fly in until the view fits the 1,000 km limit'));
+      attribute(
+        strip,
+        'aria-label',
+        t('Imagery days, newest first · arrows move, S or A and B pin'),
+      );
+      attribute(selection, 'aria-label', t('On the map'));
+      attribute(modeGroup, 'aria-label', t('Mode'));
+      for (const [mode, label] of MODE_LABELS)
+        set(modeButtons.get(mode), 'textContent', t(label));
+      set(opacityText, 'textContent', t('OPACITY'));
+      attribute(opacity, 'aria-label', t('Imagery opacity'));
+      set(swap, 'textContent', t('SWAP'));
+      set(swap, 'title', t('Trade the two sides of the divider'));
+      if (count)
+        set(count, 'textContent', snapshot.enabled ? countText(snapshot) : '');
+      renderActions();
+      renderNotice();
+      snapshot.candidates.forEach(updateCard);
+      renderSelection();
+      renderControls();
+      renderDetails();
+    });
+  });
   render();
 
   return {
@@ -1173,6 +1213,7 @@ export function createRecentImageryPanel({
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      removeLocale();
       unsubscribe();
       layer.setToolHandler?.(null);
       split?.destroy();

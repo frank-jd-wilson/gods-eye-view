@@ -47,6 +47,8 @@ import {
   getLocale,
   msg,
   persistLocaleChoice,
+  bindDocumentTranslations,
+  subscribeLocale,
   registerUnsavedWork,
   t,
 } from '../i18n/index.js';
@@ -606,6 +608,7 @@ export class StyleManager extends ShellFacade {
     this._applyRuntimeStaticHeaderText();
     this._initPanelChrome();
     this._initLocaleSelector();
+    this._initRuntimeSidebarLocale();
     this._sizeDisplayLabelColumn();
     this._initLeftPanelAdaptiveLayout();
     this._initRightPanelAdaptiveLayout();
@@ -777,6 +780,24 @@ export class StyleManager extends ShellFacade {
       current: getLocale(),
       onSelect: (locale) => this._chooseLocale(locale),
     });
+  }
+
+  /** Phase one: translate only owned rail chrome, never raw/provider text. */
+  _initRuntimeSidebarLocale() {
+    for (const remove of this._sidebarLocaleRemovers || []) remove();
+    const rails = ['left-panel-stack', 'right-context-rail']
+      .map((id) => document.getElementById(id))
+      .filter(Boolean);
+    this._sidebarLocaleRemovers = rails.map(bindDocumentTranslations);
+    const refreshChrome = () => {
+      if (this._disposed) return;
+      this._applyRuntimeStaticHeaderText();
+      for (const rail of rails)
+        for (const panel of rail.querySelectorAll('.panel-collapsible'))
+          this._panelChrome._syncPanelCollapseButton(panel);
+    };
+    refreshChrome();
+    this._sidebarLocaleRemovers.push(subscribeLocale(refreshChrome));
   }
 
   /**
@@ -1811,6 +1832,8 @@ export class StyleManager extends ShellFacade {
     this._localePicker = null;
     this._unmountBrandTitle?.();
     this._unmountBrandTitle = null;
+    for (const remove of this._sidebarLocaleRemovers || []) remove();
+    this._sidebarLocaleRemovers = [];
     this._recording.destroy();
     this._mobileShell?.destroy();
     this._panelChrome.destroy();

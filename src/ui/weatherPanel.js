@@ -129,6 +129,11 @@ export function createWeatherPanel({
   });
   const render = () => {
     if (destroyed) return;
+    if (root.getAttribute('aria-label') !== t('Active weather'))
+      root.setAttribute('aria-label', t('Active weather'));
+    if (observedGroup.getAttribute('aria-label') !== t('Observed history'))
+      observedGroup.setAttribute('aria-label', t('Observed history'));
+    set(heading, 'textContent', t('Observed history'));
     const state = clock?.getState() || {
       mode: 'latest',
       timeline: [],
