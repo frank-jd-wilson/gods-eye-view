@@ -31,10 +31,14 @@ test('brand updates synchronously both ways, uses U+FF0E and preserves accent no
   try {
     assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
     setLocale('zh-TW');
-    assert.equal(root.textContent, '數位孿生\uFF0E地球');
-    assert.equal(root.textContent.codePointAt(4), 0xff0e);
+    assert.equal(root.textContent, '數 位 孿 生\uFF0E地 球');
+    assert.equal(root.textContent.codePointAt(7), 0xff0e);
+    assert.deepEqual(
+      [...root.textContent].flatMap((c, i) => (c === '\u0020' ? [i] : [])),
+      [1, 3, 5, 9],
+    );
     assert.equal(root.children[1], accent);
-    assert.equal(accent.textContent, '地球');
+    assert.equal(accent.textContent, '地 球');
     setLocale('en');
     assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
     for (const locale of ['es', 'ru', 'zh-CN', 'fr']) {
@@ -52,10 +56,10 @@ test('disposed brand does not receive old notifications and remount has one acti
   setLocale('zh-TW');
   assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
   const second = mountBrandTitle(root);
-  assert.equal(root.textContent, '數位孿生．地球');
+  assert.equal(root.textContent, '數 位 孿 生．地 球');
   second();
   setLocale('en');
-  assert.equal(root.textContent, '數位孿生．地球');
+  assert.equal(root.textContent, '數 位 孿 生．地 球');
 });
 test('live choice keeps existing storage/URL policy and never navigates; next boot resolves saved locale', () => {
   const values = new Map();

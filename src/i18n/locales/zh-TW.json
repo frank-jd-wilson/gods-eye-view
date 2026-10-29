@@ -2867,6 +2867,6 @@
   "OpenStreetMap tiles could not be loaded. Requests are paused; choose another basemap or select OSM to retry.": "無法載入 OpenStreetMap 圖磚。已暫停請求；請切換底圖，或選擇 OSM 重試。",
   "Switch to Esri satellite imagery": "切換至 Esri 衛星影像",
   "The basemap preference could not be saved in this browser.": "無法在此瀏覽器儲存底圖偏好設定。",
-  "DIGITAL TWIN．{earth}": "數位孿生．{earth}",
-  "app-brand|EARTH": "地球"
+  "DIGITAL TWIN．{earth}": "數 位 孿 生．{earth}",
+  "app-brand|EARTH": "地 球"
 }
