@@ -25,21 +25,21 @@ function fixture() {
   };
   return { root, accent };
 }
-test('brand updates synchronously both ways, uses U+2027 and preserves accent node', () => {
+test('brand updates synchronously both ways, uses U+FF0E and preserves accent node', () => {
   const { root, accent } = fixture();
   const stop = mountBrandTitle(root);
   try {
-    assert.equal(root.textContent, 'Digital Twin Earth');
+    assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
     setLocale('zh-TW');
-    assert.equal(root.textContent, '數位孿生\u2027地球');
-    assert.equal(root.textContent.codePointAt(4), 0x2027);
+    assert.equal(root.textContent, '數位孿生\uFF0E地球');
+    assert.equal(root.textContent.codePointAt(4), 0xff0e);
     assert.equal(root.children[1], accent);
     assert.equal(accent.textContent, '地球');
     setLocale('en');
-    assert.equal(root.textContent, 'Digital Twin Earth');
+    assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
     for (const locale of ['es', 'ru', 'zh-CN', 'fr']) {
       setLocale(locale);
-      assert.equal(root.textContent, 'Digital Twin Earth');
+      assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
     }
   } finally {
     stop();
@@ -50,12 +50,12 @@ test('disposed brand does not receive old notifications and remount has one acti
   const first = mountBrandTitle(root);
   first();
   setLocale('zh-TW');
-  assert.equal(root.textContent, 'Digital Twin Earth');
+  assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
   const second = mountBrandTitle(root);
-  assert.equal(root.textContent, '數位孿生‧地球');
+  assert.equal(root.textContent, '數位孿生．地球');
   second();
   setLocale('en');
-  assert.equal(root.textContent, '數位孿生‧地球');
+  assert.equal(root.textContent, '數位孿生．地球');
 });
 test('live choice keeps existing storage/URL policy and never navigates; next boot resolves saved locale', () => {
   const values = new Map();

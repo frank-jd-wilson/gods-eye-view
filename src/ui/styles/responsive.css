@@ -4,9 +4,13 @@
   #title-bar h1 {
     font-size: 16px;
   }
+}
 
-  #title-bar h1 > span[translate='no'] {
+/* Wrap only the brand before it reaches the centered action buttons. */
+@media (min-width: 721px) and (max-width: 1399px) {
+  #title-bar h1 > #app-brand-title {
     max-width: calc(50vw - 220px);
+    overflow-wrap: anywhere;
   }
 }
 
@@ -284,6 +288,7 @@
 
 /* CJK has no Latin tracking requirement; keep the HUD font and accent. */
 #app-brand-title:lang(zh-TW) {
+  font-size: 115%;
   letter-spacing: 0.12em;
   font-variant-ligatures: none;
 }
