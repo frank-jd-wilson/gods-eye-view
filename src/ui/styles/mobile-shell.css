@@ -405,6 +405,13 @@ body.mobile-shell #corner-actions {
   bottom: auto;
 }
 
+/* Keep every language reachable above the fixed phone navigation. */
+body.mobile-shell .locale-picker-popup {
+  inset-block-end: calc(var(--mobile-tab-space) + 16px);
+  max-height: calc(100vh - var(--mobile-tab-space) - 32px);
+  max-height: calc(100dvh - var(--mobile-tab-space) - 32px);
+}
+
 /* Full-screen modes hide the phone chrome like the desktop chrome. Scene
    playback keeps it: the Scenes panel (Layers tab) holds its STOP control. */
 body.mobile-shell.ui-clean-view #mobile-tab-bar,

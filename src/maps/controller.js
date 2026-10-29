@@ -60,12 +60,15 @@ export class MapSourceController {
     this._activeImageryProvider = null;
     this._activeResolution = null;
     this._removeImageryErrorListener = null;
+    this._refreshImageryWatch = null;
     this._terrainMode = null;
     this._terrainFallback = null;
     this._retryTimer = null;
     this._retrying = false;
     this._retryRequested = false;
     this._retryDelay = FALLBACK_RETRY_MS;
+    this._imageryRecoveryAttempts = 0;
+    this._imagerySuspended = false;
     /** Expire callbacks of retry attempts in flight; destroy() runs them. */
     this._retryDeadlines = new Set();
     /** A fallback terrain a retry replaced while it stayed installed. */
@@ -133,6 +136,7 @@ export class MapSourceController {
       stacks: this.getStacks(),
       status,
       lastError: this._lastError,
+      imagerySuspended: this._imagerySuspended,
       switchOrigin: this._switchOrigin,
       ...this._registry.state,
     };
@@ -185,7 +189,10 @@ export class MapSourceController {
     return acquireImageryComparison(this, options);
   }
 
-  async setStack(id, { silent = false, [AUTOMATIC]: automatic = false } = {}) {
+  async setStack(
+    id,
+    { silent = false, retry = false, [AUTOMATIC]: automatic = false } = {},
+  ) {
     if (this._destroyed) return this.getState();
     const stack = this.getStack(id) || this.getStack(this._registry.unknownId);
     if (!stack) return null;
@@ -201,6 +208,14 @@ export class MapSourceController {
     this._lastError = null;
     if (!silent) this._emitChange('switching');
     try {
+      if (retry) {
+        const cached = await this._imageryProviders.get(stack.id);
+        if (gen !== this._switchGen) return this.getState();
+        if (cached?.fallbackFor) this._imageryProviders.delete(stack.id);
+        if (this._imagerySuspended && stack.id === this._activeId)
+          this._removeImageryLayer();
+        this._imageryRecoveryAttempts = 0;
+      }
       const activation = await this._activate(stack, gen);
       if (gen !== this._switchGen) return this.getState();
       this._activeId = activation?.effectiveStackId || stack.id;
@@ -285,6 +300,17 @@ export class MapSourceController {
   async _activateGlobeStack(stack, gen) {
     const resolution = await this._getImageryProvider(stack);
     if (gen !== this._switchGen) return;
+    // Scene handoffs/reapplied share state must not restart a failed layer.
+    // Only an explicit UI retry or a different provider may resume requests.
+    if (
+      this._imagerySuspended &&
+      this._activeImageryProvider === resolution.provider
+    )
+      return {
+        ...resolution,
+        fallbackMessage: this._sources.get(resolution.effectiveStackId)
+          ?.tileFailureStop?.message,
+      };
     // Scene shots reapply their map stack at every handoff. Keep the live
     // layer (and its loaded tiles) when the resolved provider is unchanged;
     // rebuilding it exposes the bare globe while imagery loads again.
@@ -298,12 +324,21 @@ export class MapSourceController {
       this.viewer.imageryLayers.add(this._imageryLayer, 0);
     }
     const source = this._sources.get(resolution.effectiveStackId);
-    this._credits.show(source?.credit || null);
+    this._imagerySuspended = false;
+    this._credits.show(
+      [source?.credit, source?.credit && resolution.provider.credit?.html]
+        .filter(Boolean)
+        .join(' — ') || null,
+    );
     // A repeated request still owns a new switch generation. Rebind its
     // failure listener so fallback remains live without accumulating listeners.
-    this._removeImageryErrorListener?.();
-    this._removeImageryErrorListener = null;
-    this._watchProvider(resolution, gen);
+    if (source?.tileFailureStop && this._refreshImageryWatch) {
+      this._refreshImageryWatch(gen);
+    } else {
+      this._removeImageryErrorListener?.();
+      this._removeImageryErrorListener = null;
+      this._watchProvider(resolution, gen);
+    }
     this._showTileset(null);
     this.viewer.scene.globe.show = true;
     this._activeId = resolution.effectiveStackId;
@@ -358,7 +393,12 @@ export class MapSourceController {
   async _retryFallbacks() {
     const resolution = this._activeResolution;
     const flat = this.viewer.scene.globe.show ? this._terrainFallback : null;
-    const id = resolution?.fallbackFor;
+    // At most three background imagery recovery attempts per manual retry.
+    // Never probe Esri behind an OSM layer that has itself failed.
+    const id =
+      !this._imagerySuspended && this._imageryRecoveryAttempts < 3
+        ? resolution?.fallbackFor
+        : null;
     let terrain = flat && this._sources.get(this._activeId)?.terrain;
     if (terrain?.id !== this._terrainMode) terrain = null;
     if (!id && !terrain) return;
@@ -398,6 +438,7 @@ export class MapSourceController {
     };
     // Each recovers as soon as it loads, never waiting on the other.
     const retryImagery = async () => {
+      this._imageryRecoveryAttempts++;
       const cached = this._imageryProviders.get(id);
       const provider = await attempt(this._sources.get(id).imagery, (late) =>
         this._dispose(late),
@@ -411,7 +452,7 @@ export class MapSourceController {
       this._imageryProviders.set(id, Promise.resolve(resolved(provider, id)));
       // Still showing the fallback once any switch settles: use the real one.
       const recover = () => {
-        if (this._activeResolution === resolution)
+        if (this._activeResolution === resolution && !this._imagerySuspended)
           void this.setStack(id, { [AUTOMATIC]: true });
       };
       if (!this._isSwitching) recover();
@@ -515,25 +556,88 @@ export class MapSourceController {
   }
 
   _watchProvider(resolution, gen) {
-    const fallback = this._sources.get(
-      resolution.effectiveStackId,
-    )?.tileFailureFallback;
+    const source = this._sources.get(resolution.effectiveStackId);
+    const fallback = source?.tileFailureFallback;
+    const stop = source?.tileFailureStop;
     const errorEvent = resolution.provider?.errorEvent;
-    if (!fallback || !errorEvent?.addEventListener) return;
+    if ((!fallback && !stop) || !errorEvent?.addEventListener) return;
     let failures = 0;
     let pending = false;
-    this._removeImageryErrorListener = errorEvent.addEventListener((error) => {
-      if (
-        gen !== this._switchGen ||
-        this._activeImageryProvider !== resolution.provider
-      )
-        return;
+    let disposed = false;
+    let watchGeneration = gen;
+    let watchdog = null;
+    let inFlight = 0;
+    const provider = resolution.provider;
+    const current = () =>
+      !disposed &&
+      !this._destroyed &&
+      watchGeneration === this._switchGen &&
+      this._activeImageryProvider === provider;
+    const pause = () => {
+      if (!current() || this._imagerySuspended) return;
+      clearTimeout(watchdog);
+      this._imagerySuspended = true;
+      this._imageryLayer.show = false;
+      this._lastError = stop.message;
+      this._onError?.(stop.message, this.getStack(resolution.effectiveStackId));
+      this._emitChange('error');
+      this._requestRender('map-stack');
+    };
+    const armWatchdog = () => {
+      clearTimeout(watchdog);
+      if (stop?.timeoutMs && inFlight && current() && !this._imagerySuspended)
+        watchdog = setTimeout(pause, stop.timeoutMs);
+    };
+    // Observe the public provider method, leaving Cesium's request scheduling,
+    // promise identity and cancellation intact. errorEvent alone cannot detect
+    // a connection that remains pending until the browser's own long timeout.
+    const originalRequest = provider.requestImage;
+    const thisController = this;
+    let watchedRequest;
+    if (stop && typeof originalRequest === 'function') {
+      watchedRequest = function (...args) {
+        const result = originalRequest.apply(this, args);
+        if (!result?.then || !current() || thisController._imagerySuspended)
+          return result;
+        if (++inFlight === 1) armWatchdog();
+        Promise.resolve(result).then(
+          () => {
+            inFlight--;
+            if (current()) armWatchdog();
+          },
+          () => {
+            inFlight--;
+            if (!current()) return;
+            if (args[3]?.state === Cesium.RequestState.CANCELLED) {
+              if (!inFlight) clearTimeout(watchdog);
+              return;
+            }
+            pause();
+          },
+        );
+        return result;
+      };
+      provider.requestImage = watchedRequest;
+    }
+    if (stop)
+      this._refreshImageryWatch = (generation) => {
+        watchGeneration = generation;
+      };
+    const removeError = errorEvent.addEventListener((error) => {
+      if (!current()) return;
+      // Never ask Cesium to retry a failed tile indefinitely.
+      error.retry = false;
+      if (this._imagerySuspended) return;
       const retryCount = Number(error?.timesRetried);
       failures =
         Number.isInteger(retryCount) && retryCount >= 0
           ? Math.max(failures + 1, retryCount + 1)
           : failures + 1;
-      if (failures < fallback.threshold || pending) return;
+      if (failures < (stop || fallback).threshold || pending) return;
+      if (stop) {
+        pause();
+        return;
+      }
       pending = true;
       this._onError?.(
         fallback.message,
@@ -555,9 +659,18 @@ export class MapSourceController {
           pending = false;
         });
     });
+    this._removeImageryErrorListener = () => {
+      disposed = true;
+      this._refreshImageryWatch = null;
+      clearTimeout(watchdog);
+      removeError();
+      if (watchedRequest && provider.requestImage === watchedRequest)
+        provider.requestImage = originalRequest;
+    };
   }
 
   _removeImageryLayer() {
+    this._imagerySuspended = false;
     this._removeImageryErrorListener?.();
     this._removeImageryErrorListener = null;
     if (this._imageryLayer)

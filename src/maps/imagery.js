@@ -13,10 +13,10 @@ export function createOsmImagery() {
 
 export function createEsriImagery() {
   return Cesium.ArcGisMapServerImageryProvider.fromUrl(
-    'https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
     {
-      credit:
-        'Powered by Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community',
+      // Cesium retains the service copyrightText as provider/tile credits.
+      // Do not freeze a changing list of imagery suppliers in application code.
       enablePickFeatures: false,
     },
   );

@@ -3070,5 +3070,8 @@
   "Your choice applies now, but could not be saved.": "Ваш выбор применён, но сохранить его не удалось.",
   "Voice replies appear here.": "Здесь появляются голосовые ответы.",
   "Preview is off.": "Предпросмотр отключён.",
-  "Automatic stop is unavailable for this voice connection.": "Автоматическая остановка недоступна для этого голосового подключения."
+  "Automatic stop is unavailable for this voice connection.": "Автоматическая остановка недоступна для этого голосового подключения.",
+  "OpenStreetMap tiles could not be loaded. Requests are paused; choose another basemap or select OSM to retry.": "Не удалось загрузить тайлы OpenStreetMap. Запросы приостановлены; выберите другую подложку или OSM для повтора.",
+  "Switch to Esri satellite imagery": "Переключиться на спутниковые снимки Esri",
+  "The basemap preference could not be saved in this browser.": "Не удалось сохранить выбор подложки в этом браузере."
 }

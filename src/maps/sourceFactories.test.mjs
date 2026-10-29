@@ -327,3 +327,26 @@ test('unreachable keyless terrain falls back to flat terrain marked as a fallbac
   assert.ok(result.provider instanceof Cesium.EllipsoidTerrainProvider);
   assert.equal(result.fallback, true);
 });
+
+test('Esri uses the Windows-reachable official host and lets Cesium read service attribution', async (t) => {
+  const { createEsriImagery } = await import('./imagery.js');
+  const provider = {
+    credit: { html: 'Service attribution fixture' },
+    getTileCredits: () => ['per-tile fixture'],
+  };
+  t.mock.method(
+    Cesium.ArcGisMapServerImageryProvider,
+    'fromUrl',
+    async (url, options) => {
+      assert.equal(
+        url,
+        'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer',
+      );
+      assert.equal(Object.hasOwn(options, 'credit'), false);
+      assert.equal(options.enablePickFeatures, false);
+      return provider;
+    },
+  );
+  assert.equal(await createEsriImagery(), provider);
+  assert.deepEqual(provider.getTileCredits(), ['per-tile fixture']);
+});

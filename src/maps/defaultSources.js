@@ -9,6 +9,7 @@ import {
   ESRI_ATTRIBUTION_HTML,
 } from './imagery.js';
 import { createWorldTerrain, createKeylessTerrain } from './terrain.js';
+import { msg } from '../i18n/index.js';
 
 /** Select sources and setup guidance without putting provider branches in the controller. */
 export function createDefaultMapSources({
@@ -57,6 +58,17 @@ export function createDefaultMapSources({
         ...common,
         imagery,
         terrain,
+        ...(descriptor.id === 'osm'
+          ? {
+              tileFailureStop: {
+                threshold: 1,
+                timeoutMs: 15_000,
+                message: msg(
+                  'OpenStreetMap tiles could not be loaded. Requests are paused; choose another basemap or select OSM to retry.',
+                ),
+              },
+            }
+          : {}),
         ...(descriptor.id === 'esri-imagery'
           ? {
               credit: ESRI_ATTRIBUTION_HTML,
