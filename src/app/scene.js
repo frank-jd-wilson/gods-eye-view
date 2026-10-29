@@ -13,7 +13,6 @@ import {
   uninstallRenderGovernor,
   governorRequestRender,
 } from '../renderGovernor.js';
-import { describeError } from './errors.js';
 import { t } from '../i18n/index.js';
 import { readMapPreference } from '../maps/preference.js';
 
@@ -86,12 +85,13 @@ export async function createApplicationScene({
     console.info(`[Init] Google 3D Tiles loaded via ${photoreal.route}.`);
   } else {
     if (photoreal.errors.length) {
-      const tileError = photoreal.errors.at(-1);
       console.warn(
         '[Init] Google 3D Tiles unavailable, using the keyless globe:',
-        tileError,
+        'Provider unavailable; check permissions and network access.',
       );
-      const tileErrorDetail = describeError(tileError);
+      const tileErrorDetail = t(
+        'Provider unavailable. Check permissions and network access.',
+      );
       loaderStatus.textContent = t(
         'Google 3D Tiles unavailable ({detail}). Loading the keyless globe...',
         {

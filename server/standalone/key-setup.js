@@ -310,6 +310,15 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
           }
           try {
             persistStore(upsertDotenvValues(readStore(), verdict.updates));
+            const saved = parseDotenvText(readStore());
+            if (
+              Object.entries(verdict.updates).some(
+                ([name, value]) =>
+                  String(saved[name] ?? '') !== String(value ?? ''),
+              )
+            ) {
+              throw new Error('Configuration read-back failed');
+            }
           } catch (error) {
             // The hardening failure carries its own honest, path-free message —
             // "saved world-readable" must never be reported as a generic write
@@ -350,11 +359,8 @@ function keySetupEndpoint({ sourceRoot = defaultSourceRoot } = {}) {
           // One deliberate restart, after the response has flushed. Vite's own
           // .env watcher may fire too; a second queued restart is harmless.
           setTimeout(() => {
-            server.restart().catch((error) => {
-              console.warn(
-                '[KeySetup] Dev-server restart failed:',
-                error?.message || error,
-              );
+            server.restart().catch(() => {
+              console.warn('[KeySetup] Dev-server restart failed:');
             });
           }, 250);
         });

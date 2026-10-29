@@ -1180,3 +1180,33 @@ html:not([lang='en']) .param-slider-row {
   font-size: 14px;
   line-height: 1.5;
 }
+
+.terrain-controls {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.terrain-controls label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.terrain-controls select {
+  max-width: 100%;
+  color: var(--text-primary);
+  background: var(--bg-dark);
+}
+.terrain-error-notice {
+  position: fixed;
+  right: 16px;
+  top: 110px;
+  z-index: 10001;
+  width: min(320px, calc(100vw - 32px));
+  padding: 12px;
+  box-sizing: border-box;
+  background: var(--bg-dark);
+  border: 1px solid #ffc66d;
+  font-size: 13px;
+}
+.terrain-error-notice[hidden] {
+  display: none;
+}

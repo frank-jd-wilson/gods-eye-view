@@ -1,3 +1,4 @@
+import { mountIonSettings } from './ionSettings.js';
 import { createSurfaceKeyboard } from './ui/surfaceKeyboard.js';
 import {
   readStoredCloudVoiceAuthMode,
@@ -251,6 +252,8 @@ function buildRow(documentRef, key) {
   const led = documentRef.createElement('span');
   led.className = 'key-setup-led';
   led.setAttribute('aria-hidden', 'true');
+  if (key.id === 'cesium-ion')
+    led.title = t('Configured only; token permissions have not been verified.');
   const title = documentRef.createElement('strong');
   title.textContent = key.title; // i18n-ignore: provider product name
   const tier = documentRef.createElement('span');
@@ -374,6 +377,7 @@ export async function initKeySetup({
   documentRef = globalThis.document,
   fetchImpl,
   signal,
+  cesiumToken = '',
 } = {}) {
   const chip = documentRef?.getElementById?.('key-setup-chip');
   const root = documentRef?.getElementById?.('key-setup');
@@ -434,6 +438,11 @@ export async function initKeySetup({
   const chipLabel = chip.querySelector('[data-key-setup-chip-label]') || chip;
   const statusLine = root.querySelector('[data-key-setup-status]');
   const defaultStatusText = statusLine?.textContent || '';
+  const ionSettings = mountIonSettings(root, {
+    token: cesiumToken,
+    signal: lifetime.signal,
+    fetchImpl: doFetch,
+  });
   let busy = false;
   let oauthBusy = false;
   let open = false;
@@ -518,6 +527,7 @@ export async function initKeySetup({
     applyButton?.setAttribute('aria-disabled', 'true');
     say(t('Saving…'));
     try {
+      await ionSettings.beforeSave(updates);
       const response = await doFetch('/api/setup/keys', {
         method: 'POST',
         signal: lifetime.signal,
@@ -527,6 +537,7 @@ export async function initKeySetup({
       const payload = await response.json().catch(() => ({}));
       if (disposed) return;
       if (!response.ok || !payload.ok) {
+        ionSettings.failed();
         say(saveRefusalText(payload, response.status));
         return;
       }
@@ -558,12 +569,10 @@ export async function initKeySetup({
         });
       }
       say(t(doneMessageKey, { store: storeLabel() }));
-    } catch (error) {
-      say(
-        t('Save failed: {detail}', {
-          detail: error?.message || error,
-        }),
-      );
+      ionSettings.saved();
+    } catch {
+      ionSettings.failed();
+      say(t('Save failed. Check the local development server and try again.'));
     } finally {
       busy = false;
       applyButton?.setAttribute('aria-disabled', 'false');
@@ -738,6 +747,7 @@ export async function initKeySetup({
 
   disposeControls = () => {
     open = false;
+    ionSettings.destroy();
     keyboard.destroy();
     chip.removeEventListener('click', openDialog);
     closeButton?.removeEventListener('click', close);

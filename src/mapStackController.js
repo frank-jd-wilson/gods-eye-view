@@ -1,3 +1,6 @@
+import * as Cesium from 'cesium';
+import { TerrainSelection } from './maps/terrainSelection.js';
+import { createWorldTerrain, createKeylessTerrain } from './maps/terrain.js';
 import { MapSourceController } from './maps/controller.js';
 import { createDefaultMapSources } from './maps/defaultSources.js';
 import { governorRequestRender } from './renderGovernor.js';
@@ -10,6 +13,8 @@ export class MapStackController extends MapSourceController {
     const googleApiKey =
       typeof window !== 'undefined' ? window.__GOOGLE_MAPS_API_KEY__ : '';
     const registry = createDefaultMapSources({ ...options, googleApiKey });
+    // Terrain has an independent owner; imagery activation cannot fail on terrain.
+    for (const source of registry.sources) delete source.terrain;
     super(viewer, {
       registry,
       initialStack: options.googleTileset
@@ -18,8 +23,26 @@ export class MapStackController extends MapSourceController {
       ...options,
       requestRender: governorRequestRender,
     });
+    this.terrainSelection = new TerrainSelection(viewer, {
+      hasToken: Boolean(String(options.cesiumToken || '').trim()),
+      factories: {
+        world: (request) => createWorldTerrain(options.cesiumToken, request),
+        keyless: createKeylessTerrain,
+        flat: async () => ({ provider: new Cesium.EllipsoidTerrainProvider() }),
+      },
+    });
     this.googleTileset = options.googleTileset || null;
     this.cesiumToken = String(options.cesiumToken || '').trim();
+  }
+  async setStack(...args) {
+    const state = await super.setStack(...args);
+    this.terrainSelection?.emit();
+    await this.terrainSelection?.ensure();
+    return state;
+  }
+  destroy() {
+    this.terrainSelection?.destroy();
+    super.destroy();
   }
   _hasPhotorealCredentials() {
     const googleKey =
