@@ -89,12 +89,17 @@
  *   --url <url>        App URL (default http://localhost:4173)
  *   --headful          Show the browser (debugging)
  *   --offline-imagery  Use bundled texture for known Esri/OSM tile images only
+ *   --arrival-repeats <n>  Repeat each original arrival probe (1–100; default 1)
+ *   --arrival-report <file> Save all observations and timing statistics as JSON
+ *   --arrival-diagnostics  Capture pre/post-render timing without changing assertions
  *   --keep-open        Leave the browser open after the run (debugging)
  */
 
 import fs from 'node:fs';
+import path from 'node:path';
+import { arrivalRepeatCount, summarizeArrival } from './lib/arrival-timings.mjs';
 import puppeteer from 'puppeteer';
-import { arrivalRotationPassed } from '../src/tooling/trackArrivalObservation.mjs';
+import { ARRIVAL_OBSERVATION_MS, arrivalRotationPassed } from '../src/tooling/trackArrivalObservation.mjs';
 import { classifyAircraft, CLASS_SCALE_3D, CLASS_MODEL_REAL } from '../src/data/aircraftClass.js';
 import { ensureGeoidReady, geoidHeight } from '../src/data/geoid.js';
 
@@ -114,6 +119,10 @@ const APP_ORIGIN = new URL(APP_URL).origin;
 const HEADFUL = getFlag('--headful');
 const OFFLINE_IMAGERY = getFlag('--offline-imagery');
 const KEEP_OPEN = getFlag('--keep-open');
+const ARRIVAL_REPEATS = arrivalRepeatCount(getOpt('--arrival-repeats', getFlag('--arrival-repeats') ? null : '1'));
+const ARRIVAL_REPORT = getOpt('--arrival-report', null);
+if (getFlag('--arrival-report') && (!ARRIVAL_REPORT || ARRIVAL_REPORT.startsWith('--'))) throw new Error('--arrival-report requires a new JSON filename');
+const arrivalSamples = { flights: [], military: [] };
 
 const CHROME_EXECUTABLE_CANDIDATES = [
   process.env.PUPPETEER_EXECUTABLE_PATH,
@@ -2702,110 +2711,86 @@ async function main() {
     // rotation refresh can repair an incorrect first reveal.
     // ============================================================
     console.log('\nChange 4 — arrival rotation: moveEnd settle pass + horizon-reveal pass');
-    const arrival = await evalPage(async () => {
-      const v = window.__godsEyeView.viewer;
-      const dm = window.__godsEyeView.dataManager;
-      const { screenProjectedRotation } = await import(`${window.__gevQaSourceBase || '/src'}/data/iconOrientation.js`);
-      const { observeArrivalRotation } = await import(`${window.__gevQaSourceBase || '/src'}/tooling/trackArrivalObservation.mjs`);
-      // 3D models OFF for this phase: a model-handed-off billboard is hidden
-      // and skips rotation updates entirely — the probes need live billboards
-      // (this is also the app's default state the field report came from).
-      dm.layers.get('flights').module.setParams({ models3d: false });
-      dm.layers.get('military').module.setParams({ models3d: false });
-      const findBB = (id) => {
-        let found = null;
-        const walk = (coll) => {
-          const n = coll.length;
-          for (let i = 0; i < n; i++) {
-            let p;
-            try { p = coll.get(i); } catch { continue; }
-            if (!p) continue;
-            if (typeof p.length === 'number' && typeof p.get === 'function') { walk(p); continue; }
-            if (p.image !== undefined && p.alignedAxis !== undefined && p.id === id) found = p;
-          }
+    for (let trial = 1; trial <= ARRIVAL_REPEATS; trial++) {
+      console.log(`Arrival trial ${trial}/${ARRIVAL_REPEATS}`);
+      const arrival = await evalPage(async (captureFrames) => {
+        const { runArrivalProbe } = await import(
+          `${window.__gevQaSourceBase || '/src'}/tooling/trackArrivalProbe.mjs`
+        );
+        return runArrivalProbe({ captureFrames });
+      }, getFlag('--arrival-diagnostics'));
+      const fmtArr = (a) =>
+        !a
+          ? `no result (${arrival?.error || 'phase error'})`
+          : a.error
+            ? `${a.error}; elapsed=${Number(a.elapsedMs).toFixed(1)} ms`
+            : `settle-err=${((a.dMoveEnd * 180) / Math.PI).toFixed(1)}° reveal-err=${((a.dReveal * 180) / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} settle=${a.moveEndMs.toFixed(1)} ms reveal=${a.revealMs.toFixed(1)} ms total=${a.elapsedMs.toFixed(1)} ms hasModel=${a.hasModel}`;
+      const TAMPER_DEG = (1.5 * 180) / Math.PI; // ≈ 86° — an uncorrected nose stays this far off
+      record(
+        `arrival: moveEnd + first reveal both re-aim before idle refresh, flights (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
+        arrivalRotationPassed(arrival.flights),
+        fmtArr(arrival.flights),
+      );
+      record(
+        `arrival: moveEnd + first reveal both re-aim before idle refresh, military (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
+        arrivalRotationPassed(arrival.military),
+        fmtArr(arrival.military),
+      );
+      for (const layer of ['flights', 'military']) {
+        const observation = arrival[layer] || {
+          error: arrival.error || 'phase error',
         };
-        walk(v.scene.primitives);
-        return found;
-      };
-      const nextFrames = (n) => new Promise((res) => {
-        let count = 0;
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          rm();
-          res();
+        arrivalSamples[layer].push({
+          trial,
+          ...observation,
+          passed: arrivalRotationPassed(observation),
+        });
+      }
+    }
+    const arrivalSummary = Object.fromEntries(
+      Object.entries(arrivalSamples).map(([layer, samples]) => [
+        layer,
+        summarizeArrival(samples),
+      ]),
+    );
+    console.log(
+      'Arrival timing summary (ms; nearest-rank P95, failures included):',
+      JSON.stringify(arrivalSummary),
+    );
+    if (ARRIVAL_REPORT) {
+      const renderer = await evalPage(() => {
+        const gl = window.__godsEyeView.viewer.scene.context._gl;
+        const ext = gl.getExtension('WEBGL_debug_renderer_info');
+        return {
+          renderer: ext
+            ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)
+            : gl.getParameter(gl.RENDERER),
+          viewport: { width: innerWidth, height: innerHeight, devicePixelRatio },
         };
-        const rm = v.scene.postRender.addEventListener(() => {
-          if (++count >= n) {
-            finish();
-            return;
-          }
-          v.scene.requestRender();
-        });
-        const timer = setTimeout(finish, Math.max(10000, n * 1500));
-        v.scene.requestRender();
       });
-      // Park the camera straight above the flights cluster (lift a live
-      // billboard's position radially — no Cesium global needed in-page) so
-      // every probe plane projects on-screen, then let rotations settle at
-      // the new pose (the setView pose change forces a pass on the next tick).
-      // aaa002 — aaa001 was evicted for good by the M3 age-out phase.
-      const anchor = findBB('aaa002');
-      if (!anchor) return { error: 'anchor aaa002 missing' };
-      const p = anchor.position;
-      const r = Math.hypot(p.x, p.y, p.z);
-      const k = (r + 25000) / r;
-      v.camera.cancelFlight();
-      v.camera.setView({
-        destination: { x: p.x * k, y: p.y * k, z: p.z * k },
-        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
-      });
-      await nextFrames(3);
-      const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
-      const probe = async (id, course) => {
-        const bb = findBB(id);
-        if (!bb || !bb.show) return { error: `${id} missing/hidden` };
-        const r0 = bb.rotation; // settled tamper origin; correctness uses a fresh projection below
-        const observed = await observeArrivalRotation({
-          scene: v.scene,
-          startMoveEnd() {
-            // Only moveEnd can repair the tampered angle at the idle pose.
-            bb.rotation = r0 + 1.5;
-            v.camera.moveEnd.raiseEvent();
+      fs.mkdirSync(path.dirname(ARRIVAL_REPORT), { recursive: true });
+      fs.writeFileSync(
+        ARRIVAL_REPORT,
+        JSON.stringify(
+          {
+            recordedAt: new Date().toISOString(),
+            node: process.version,
+            browser: await browser.version(),
+            headful: HEADFUL,
+            offlineImagery: OFFLINE_IMAGERY,
+            frameDiagnostics: getFlag('--arrival-diagnostics'),
+            ...renderer,
+            deadlineMs: ARRIVAL_OBSERVATION_MS,
+            percentileMethod: 'nearest-rank',
+            samples: arrivalSamples,
+            summary: arrivalSummary,
           },
-          startReveal() {
-            // Hide immediately after the confirmed settle frame. The next
-            // eligible fleet tick must reveal AND re-aim in that same tick.
-            bb.rotation = r0 + 1.5;
-            bb.show = false;
-          },
-          read() {
-            return {
-              shown: bb.show,
-              rotationError: angDiff(bb.rotation,
-                screenProjectedRotation(v.scene, bb.position, course, null)),
-            };
-          },
-        });
-        const hasModel = !!(window.__g3dFindModel && window.__g3dFindModel(id));
-        return { r0, ...observed, hasModel };
-      };
-      const flightCourse = window.__SYNTH.flights.find((f) => f.icao === 'aaa002')?.track ?? 0;
-      const militaryCourse = window.__SYNTH.military.find((m) => m.hex === 'bbb101')?.track ?? 0;
-      return {
-        flights: await probe('aaa002', flightCourse),
-        military: await probe('bbb101', militaryCourse),
-      };
-    });
-    const fmtArr = (a) => (!a ? `no result (${arrival?.error || 'phase error'})` : a.error ? `${a.error}; elapsed=${Number(a.elapsedMs).toFixed(1)} ms`
-      : `settle-err=${(a.dMoveEnd * 180 / Math.PI).toFixed(1)}° reveal-err=${(a.dReveal * 180 / Math.PI).toFixed(1)}° shown=${a.shown} flipFrame=${a.flipFrame} settle=${a.moveEndMs.toFixed(1)} ms reveal=${a.revealMs.toFixed(1)} ms total=${a.elapsedMs.toFixed(1)} ms hasModel=${a.hasModel}`);
-    const TAMPER_DEG = 1.5 * 180 / Math.PI; // ≈ 86° — an uncorrected nose stays this far off
-    record(`arrival: moveEnd + first reveal both re-aim before idle refresh, flights (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
-      arrivalRotationPassed(arrival.flights), fmtArr(arrival.flights));
-    record(`arrival: moveEnd + first reveal both re-aim before idle refresh, military (tamper was ${TAMPER_DEG.toFixed(0)}°)`,
-      arrivalRotationPassed(arrival.military), fmtArr(arrival.military));
+          null,
+          2,
+        ) + '\n',
+        { flag: 'wx', mode: 0o600 },
+      );
+    }
 
     // ============================================================
     // DISPLAY FLOOR (2026-08-19): a grounded contact must never render below
@@ -4198,7 +4183,7 @@ function waitFor(pred, timeoutMs) {
   });
 }
 
-main().catch((err) => {
+await main().catch((err) => {
   console.error('\n\x1b[31mHarness error:\x1b[0m', err && err.stack ? err.stack : err);
   process.exit(2);
 });
