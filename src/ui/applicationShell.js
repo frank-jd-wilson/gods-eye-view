@@ -1,3 +1,4 @@
+import { createTerrainControls } from './terrainControls.js';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
 import { AircraftDisplay } from './aircraftDisplay.js';
@@ -960,6 +961,11 @@ export class StyleManager extends ShellFacade {
   _initMapStackControl() {
     if (!this.mapStackController) return;
 
+    this._terrainControls?.destroy();
+    this._terrainControls = createTerrainControls(
+      this._mapStackChips,
+      this.mapStackController.terrainSelection,
+    );
     this._mapSourceControls?.destroy();
     this._mapSourceControls = createMapSourceControls({
       container: this._mapStackChips,
@@ -997,6 +1003,7 @@ export class StyleManager extends ShellFacade {
    */
   _renderMapStackState(state) {
     this._mapSourceControls?.render(state);
+    this._terrainControls?.render?.();
   }
 
   _setDetectionAllocation(strategy, { syncShare = true, persist = true } = {}) {
@@ -1840,6 +1847,7 @@ export class StyleManager extends ShellFacade {
     this._feedback.destroy();
 
     this._displayBindings.destroy();
+    this._terrainControls?.destroy();
     this._mapSourceControls?.destroy();
     this._cameraOrientationControls?.destroy();
     this._clearLayersControl?.destroy();

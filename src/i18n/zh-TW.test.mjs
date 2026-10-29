@@ -119,8 +119,8 @@ test('priority menus, settings, layers, loading and errors use Taiwanese terms',
   ])
     assert.equal(t(source), expected);
   assert.equal(
-    t('Save failed: {detail}', { detail: 'EACCES' }),
-    '儲存失敗：EACCES',
+    t('Save failed. Check the local development server and try again.'),
+    '儲存失敗。請檢查本機開發伺服器後再試一次。',
   );
 });
 

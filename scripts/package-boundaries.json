@@ -817,7 +817,8 @@
       "src/ui/statusText.js",
       "src/ui/statusBadge.js",
       "src/scopeMaskPolicy.js",
-      "src/maps/preference.js"
+      "src/maps/preference.js",
+      "src/ui/terrainControls.js"
     ],
     "external": ["cesium"]
   },
@@ -1665,7 +1666,8 @@
       "src/i18n/locales/ru.json",
       "src/i18n/locales/zh-CN.json",
       "src/i18n/locales/zh-TW.json",
-      "src/maps/preference.js"
+      "src/maps/preference.js",
+      "src/maps/ionStatus.js"
     ],
     "external": ["cesium"]
   },
@@ -2633,7 +2635,11 @@
       "src/ui/statusBadge.js",
       "src/sceneCommandRelease.js",
       "src/scopeMaskPolicy.js",
-      "src/maps/preference.js"
+      "src/maps/preference.js",
+      "src/ui/terrainControls.js",
+      "src/maps/terrainSelection.js",
+      "src/maps/ionStatus.js",
+      "src/ionSettings.js"
     ],
     "external": [
       "hls.js",

@@ -2,7 +2,12 @@ import { startApplicationChrome } from '../app/startupChrome.js';
 import { initKeySetup } from '../keySetup.js';
 export function startStandaloneChrome(options) {
   return startApplicationChrome({
-    initializeSettings: initKeySetup,
+    initializeSettings: ({ signal }) =>
+      initKeySetup({
+        signal,
+        cesiumToken:
+          options.styleManager?.mapStackController?.cesiumToken || '',
+      }),
     ...options,
   });
 }

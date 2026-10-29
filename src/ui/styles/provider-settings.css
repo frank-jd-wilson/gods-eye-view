@@ -421,3 +421,12 @@ body.scene-playback-mode #key-setup {
   border-color: rgba(255, 170, 150, 0.65);
   outline: none;
 }
+
+/* Presence is amber; only a successful World Terrain access check is green. */
+.key-setup-row[data-key-id='cesium-ion'][data-set='true']:not(
+    [data-ion-verified='true']
+  )
+  .key-setup-led {
+  background: #ffc66d;
+  box-shadow: none;
+}

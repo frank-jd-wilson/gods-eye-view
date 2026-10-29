@@ -1,3 +1,4 @@
+import { ionFailure } from './ionStatus.js';
 import { indexMapSources } from './registry.js';
 import * as Cesium from 'cesium';
 import { createMapCredits } from './credits.js';
@@ -228,7 +229,9 @@ export class MapSourceController {
       if (!silent) this._emitChange('ready');
     } catch (error) {
       if (gen !== this._switchGen) return this.getState();
-      const message = error?.message || String(error);
+      const message = stack.requiresIon
+        ? ionFailure(error)
+        : error?.message || String(error);
       this._lastError = message;
       this._onError?.(message, stack);
       const recovery = this.getStack(this._registry.recoveryId);
