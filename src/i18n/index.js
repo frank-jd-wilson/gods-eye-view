@@ -246,6 +246,9 @@ const DOCUMENT_TRANSLATION_TARGETS = Object.freeze([
   ['data-i18n-aria-label', 'aria-label'],
   ['data-i18n-placeholder', 'placeholder'],
 ]);
+// Canonical sources live with each node, not in a reverse-translation index.
+// Weak keys allow detached panels to be collected without a global DOM cache.
+const documentSources = new WeakMap();
 
 /**
  * Translate every opted-in element in `doc` at boot. Phase-one live switching
@@ -253,24 +256,54 @@ const DOCUMENT_TRANSLATION_TARGETS = Object.freeze([
  * @param {Document|Element} doc
  * @returns {number} Count of element/attribute writes performed.
  */
-export function applyDocumentTranslations(doc) {
+export function applyDocumentTranslations(
+  doc,
+  { preserveDynamic = false } = {},
+) {
   if (typeof doc?.querySelectorAll !== 'function') return 0;
-  if (!CATALOGS[currentLocale]) return 0;
   let applied = 0;
   for (const [marker, attribute] of DOCUMENT_TRANSLATION_TARGETS) {
     for (const element of doc.querySelectorAll(`[${marker}]`)) {
-      const source = attribute
+      const current = attribute
         ? element.getAttribute(attribute)
         : normalizeMarkupText(element.textContent);
-      if (!source) continue;
-      const text = t(source);
-      if (text === source) continue;
+      if (!current) continue;
+      let sources = documentSources.get(element);
+      if (!sources) {
+        sources = new Map();
+        documentSources.set(element, sources);
+      }
+      let binding = sources.get(marker);
+      if (!binding) {
+        binding = {
+          source: element.getAttribute(marker) || current,
+          last: current,
+        };
+        sources.set(marker, binding);
+      }
+      // A feature owner has replaced this label/tooltip with live state.
+      // Its renderer must translate that state; never overwrite it with a
+      // cached initial label (or try to translate provider/user data).
+      if (preserveDynamic && current !== binding.last) continue;
+      const text = t(binding.source);
+      binding.last = text;
+      if (text === current) continue;
       if (attribute) element.setAttribute(attribute, text);
       else element.textContent = text;
       applied += 1;
     }
   }
   return applied;
+}
+
+/** Bind an explicitly owned subtree, including currently hidden panels.
+ * New feature DOM must use its current-locale renderer or explicit marker key;
+ * this deliberately installs no global MutationObserver or text guessing. */
+export function bindDocumentTranslations(root) {
+  const render = () =>
+    applyDocumentTranslations(root, { preserveDynamic: true });
+  render();
+  return subscribeLocale(render);
 }
 
 const unsavedWorkChecks = new Set();

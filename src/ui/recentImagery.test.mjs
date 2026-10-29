@@ -1,4 +1,11 @@
 import test from 'node:test';
+import { setLocale, t } from '../i18n/index.js';
+const liveReadouts = new Set();
+test.afterEach(() => {
+  for (const view of liveReadouts) view.destroy();
+  liveReadouts.clear();
+  setLocale('en');
+});
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRecentImageryPanel } from './recentImagery.js';
@@ -293,6 +300,7 @@ function fixture({ fetchImpl, controller = fakeController() } = {}) {
     },
     revokeObjectUrl: (url) => urls.revoked.push(url),
   });
+  liveReadouts.add(readout);
   const root = readout.root;
   const byId = (id) => root.find((node) => node.id === id);
   const byAction = (id) => root.find((node) => node.dataset.actionId === id);
@@ -1185,4 +1193,63 @@ test('destroy returns every listener, the divider and the panel state', async ()
   f.layer.setMode('ab');
   assert.equal(f.splits.length, 1, 'no renders after destroy');
   f.readout.destroy();
+});
+
+test('runtime locale preserves open Details, controls and layer snapshot without data actions', async () => {
+  const f = fixture();
+  await f.ready();
+  const header = f
+    .byId('ri-details')
+    .find((n) => n.classList.contains('rail-card-header'));
+  header.click();
+  const article = header.parentNode;
+  const opacity = f.byId('ri-opacity');
+  const value = opacity.value;
+  const state = () => {
+    const s = f.snap();
+    return Object.fromEntries(
+      [
+        'enabled',
+        'box',
+        'boxSizeKm',
+        'boxError',
+        'zoomToFit',
+        'searching',
+        'sources',
+        'showUnavailable',
+        'hiddenCount',
+        'candidates',
+        'mode',
+        'shown',
+        'alpha',
+        'split',
+        'swapped',
+        'comparison',
+        'borrowedEsri',
+        'toolActive',
+        'auto',
+      ].map((k) => [k, s[k]]),
+    );
+  };
+  const before = structuredClone(state());
+  const fetches = f.fetches.length;
+  for (const locale of ['zh-TW', 'en', 'zh-TW']) {
+    setLocale(locale);
+    assert.equal(
+      f
+        .byId('ri-details')
+        .find((n) => n.classList.contains('rail-card-header')),
+      header,
+    );
+    assert.equal(article.dataset.open, 'true');
+    assert.equal(opacity.value, value);
+    assert.equal(f.byId('ri-swap').textContent, t('SWAP'));
+  }
+  assert.deepEqual(state(), before);
+  assert.equal(f.fetches.length, fetches);
+  assert.match(
+    f.byId('ri-details').textContent,
+    /S30-2026-09-18/,
+    'raw device/granule ids remain intact',
+  );
 });

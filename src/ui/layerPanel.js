@@ -18,6 +18,7 @@ import {
   msg,
   t,
   translateKnown,
+  subscribeLocale,
 } from '../i18n/index.js';
 
 // Feed-state values are machine ids (QA hooks, CSS feed-* classes); only the
@@ -226,6 +227,10 @@ export class LayerPanel {
     if (this._destroyed) return;
     this._releaseBindings();
     this._toggleContainer = container;
+    this._removeLocaleListener?.();
+    this._removeLocaleListener = subscribeLocale(() =>
+      this._refreshTogglePanel(),
+    );
     this._weatherPanel?.destroy();
     this._weatherPanel = createWeatherPanel({
       clock: this.weatherClock,
@@ -269,6 +274,9 @@ export class LayerPanel {
   destroy() {
     if (this._destroyed) return;
     this._destroyed = true;
+    this._removeLocaleListener?.();
+    this._removeLocaleListener = null;
+    this._groupHeadings?.clear();
     this._releaseBindings();
     this._weatherPanel?.destroy();
     this._weatherPanel = null;
@@ -281,6 +289,7 @@ export class LayerPanel {
     if (this._destroyed || !this._toggleContainer) return;
     this._releaseBindings();
     this._toggleContainer.innerHTML = '';
+    this._groupHeadings = new Map();
 
     const generation = this._generation;
     const layers = this.getAll()
@@ -300,6 +309,7 @@ export class LayerPanel {
         const heading = document.createElement('h3');
         heading.className = 'data-layer-group-heading';
         heading.textContent = t(group);
+        this._groupHeadings.set(heading, group);
         this._toggleContainer.appendChild(heading);
       }
       previousGroup = group;
@@ -599,11 +609,15 @@ export class LayerPanel {
       this.onHiddenRefresh();
       return;
     }
+    for (const [heading, key] of this._groupHeadings || [])
+      setRowText(heading, t(key));
     for (const layer of this.getAll()) {
       const row = this._toggleContainer.querySelector(
         `[data-layer-id="${layer.id}"]`,
       );
       if (!row) continue;
+      const name = row.querySelector('.data-name');
+      if (name) setRowText(name, panelLabel(layer));
 
       const btn = row.querySelector('.data-toggle-btn');
       if (btn) {
