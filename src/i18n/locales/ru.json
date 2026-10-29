@@ -3074,6 +3074,6 @@
   "OpenStreetMap tiles could not be loaded. Requests are paused; choose another basemap or select OSM to retry.": "Не удалось загрузить тайлы OpenStreetMap. Запросы приостановлены; выберите другую подложку или OSM для повтора.",
   "Switch to Esri satellite imagery": "Переключиться на спутниковые снимки Esri",
   "The basemap preference could not be saved in this browser.": "Не удалось сохранить выбор подложки в этом браузере.",
-  "Digital Twin {earth}": "Digital Twin {earth}",
-  "app-brand|Earth": "Earth"
+  "DIGITAL TWIN．{earth}": "DIGITAL TWIN．{earth}",
+  "app-brand|EARTH": "EARTH"
 }

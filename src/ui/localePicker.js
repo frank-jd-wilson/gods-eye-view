@@ -637,11 +637,11 @@ export function mountBrandTitle(root) {
   const suffix = root.ownerDocument.createTextNode('');
   root.replaceChildren(prefix, accent, suffix);
   const render = () => {
-    const title = t('Digital Twin {earth}', { earth: '\u0000' });
+    const title = t('DIGITAL TWIN．{earth}', { earth: '\u0000' });
     const [before, after = ''] = title.split('\u0000');
     prefix.nodeValue = before;
     suffix.nodeValue = after;
-    accent.textContent = t('Earth', { context: 'app-brand' });
+    accent.textContent = t('EARTH', { context: 'app-brand' });
   };
   render();
   return subscribeLocale(render);
