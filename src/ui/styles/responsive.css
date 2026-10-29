@@ -9,7 +9,7 @@
 /* Wrap only the brand before it reaches the centered action buttons. */
 @media (min-width: 721px) and (max-width: 1399px) {
   #title-bar h1 > #app-brand-title {
-    max-width: calc(50vw - 220px);
+    max-width: calc(50vw - 252px);
     overflow-wrap: anywhere;
   }
 }
@@ -292,4 +292,24 @@
   letter-spacing: 0;
   white-space: pre-wrap;
   font-variant-ligatures: none;
+}
+
+/* Original transparent PNG: only the title logo, not the shared loader/favicon. */
+:root #title-bar h1 > .title-logo.title-logo-png {
+  width: 84px;
+  flex: 0 0 84px;
+  aspect-ratio: auto;
+  filter: none;
+}
+
+:root #title-bar .title-logo.title-logo-png > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: none;
+}
+
+#title-bar .title-logo.title-logo-png::before,
+#title-bar .title-logo.title-logo-png::after {
+  display: none;
 }
