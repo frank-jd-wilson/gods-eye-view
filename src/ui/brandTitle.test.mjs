@@ -30,8 +30,10 @@ test('brand updates synchronously both ways, uses U+FF0E and preserves accent no
   const stop = mountBrandTitle(root);
   try {
     assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
+    assert.equal(root.lang, 'en');
     setLocale('zh-TW');
     assert.equal(root.textContent, '數 位 孿 生\uFF0E地 球');
+    assert.equal(root.lang, 'zh-TW');
     assert.equal(root.textContent.codePointAt(7), 0xff0e);
     assert.deepEqual(
       [...root.textContent].flatMap((c, i) => (c === '\u0020' ? [i] : [])),
@@ -41,10 +43,25 @@ test('brand updates synchronously both ways, uses U+FF0E and preserves accent no
     assert.equal(accent.textContent, '地 球');
     setLocale('en');
     assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
+    assert.equal(root.lang, 'en');
     for (const locale of ['es', 'ru', 'zh-CN', 'fr']) {
       setLocale(locale);
       assert.equal(root.textContent, 'DIGITAL TWIN．EARTH');
     }
+  } finally {
+    stop();
+  }
+});
+test('initial Taiwanese brand owns its language even when the host is English', () => {
+  setLocale('zh-TW');
+  const { root } = fixture();
+  root.lang = 'en';
+  const stop = mountBrandTitle(root);
+  try {
+    assert.equal(root.lang, 'zh-TW');
+    assert.equal(root.textContent, '數 位 孿 生．地 球');
+    setLocale('en');
+    assert.equal(root.lang, 'en');
   } finally {
     stop();
   }

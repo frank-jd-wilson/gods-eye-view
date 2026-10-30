@@ -11,7 +11,7 @@
  * marks the active option.
  */
 
-import { t, subscribeLocale } from '../i18n/index.js';
+import { t, subscribeLocale, getLocale } from '../i18n/index.js';
 import { LOCALES, LOCALE_NAMES } from '../i18n/locale.js';
 
 /** Above this many languages the list gets a search field. */
@@ -637,6 +637,8 @@ export function mountBrandTitle(root) {
   const suffix = root.ownerDocument.createTextNode('');
   root.replaceChildren(prefix, accent, suffix);
   const render = () => {
+    // Bind typography to the same locale as the text, including initial mount.
+    root.lang = getLocale() === 'zh-TW' ? 'zh-TW' : 'en';
     const title = t('DIGITAL TWIN．{earth}', { earth: '\u0000' });
     const [before, after = ''] = title.split('\u0000');
     prefix.nodeValue = before;
