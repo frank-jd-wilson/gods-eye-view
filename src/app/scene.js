@@ -59,7 +59,7 @@ export async function createApplicationScene({
   defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
-  // No Google requests during standard startup. The registry owns lazy loading.
+  // The registry owns Google loading; the Viewer itself starts with a globe.
   const tileset = null;
   viewer.scene.globe.show = true;
 
@@ -87,7 +87,10 @@ export async function createApplicationScene({
   defer(() => mapStackController.destroy());
   // An explicit share is restored later by the existing share coordinator.
   const preferredMap = readMapPreference();
-  await mapStackController.setStack(preferredMap || 'esri-imagery', {
+  const defaultMap = mapStackController.isStackAvailable('photoreal')
+    ? 'photoreal'
+    : 'esri-imagery';
+  await mapStackController.setStack(preferredMap || defaultMap, {
     silent: true,
   });
 
