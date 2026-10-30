@@ -818,7 +818,8 @@
       "src/ui/statusBadge.js",
       "src/scopeMaskPolicy.js",
       "src/maps/preference.js",
-      "src/ui/terrainControls.js"
+      "src/ui/terrainControls.js",
+      "src/ui/buildingsControls.js"
     ],
     "external": ["cesium"]
   },
@@ -2639,7 +2640,9 @@
       "src/ui/terrainControls.js",
       "src/maps/terrainSelection.js",
       "src/maps/ionStatus.js",
-      "src/ionSettings.js"
+      "src/ionSettings.js",
+      "src/ui/buildingsControls.js",
+      "src/maps/buildings.js"
     ],
     "external": [
       "hls.js",

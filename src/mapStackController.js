@@ -1,3 +1,4 @@
+import { BuildingsController } from './maps/buildings.js';
 import * as Cesium from 'cesium';
 import { TerrainSelection } from './maps/terrainSelection.js';
 import { createWorldTerrain, createKeylessTerrain } from './maps/terrain.js';
@@ -31,16 +32,21 @@ export class MapStackController extends MapSourceController {
         flat: async () => ({ provider: new Cesium.EllipsoidTerrainProvider() }),
       },
     });
+    this.buildings = new BuildingsController(viewer, {
+      token: options.cesiumToken,
+    });
     this.googleTileset = options.googleTileset || null;
     this.cesiumToken = String(options.cesiumToken || '').trim();
   }
   async setStack(...args) {
     const state = await super.setStack(...args);
+    this.buildings?.syncMapVisibility();
     this.terrainSelection?.emit();
     await this.terrainSelection?.ensure();
     return state;
   }
   destroy() {
+    this.buildings?.destroy();
     this.terrainSelection?.destroy();
     super.destroy();
   }

@@ -1,3 +1,4 @@
+import { createBuildingsControls } from './buildingsControls.js';
 import { createTerrainControls } from './terrainControls.js';
 import { resolveImageryHost } from '../layers/weather/imageryHost.js';
 import { ShellFacade } from './shellFacade.js';
@@ -961,10 +962,15 @@ export class StyleManager extends ShellFacade {
   _initMapStackControl() {
     if (!this.mapStackController) return;
 
+    this._buildingsControls?.destroy();
     this._terrainControls?.destroy();
     this._terrainControls = createTerrainControls(
       this._mapStackChips,
       this.mapStackController.terrainSelection,
+    );
+    this._buildingsControls = createBuildingsControls(
+      this._mapStackChips,
+      this.mapStackController.buildings,
     );
     this._mapSourceControls?.destroy();
     this._mapSourceControls = createMapSourceControls({
@@ -1847,6 +1853,7 @@ export class StyleManager extends ShellFacade {
     this._feedback.destroy();
 
     this._displayBindings.destroy();
+    this._buildingsControls?.destroy();
     this._terrainControls?.destroy();
     this._mapSourceControls?.destroy();
     this._cameraOrientationControls?.destroy();
