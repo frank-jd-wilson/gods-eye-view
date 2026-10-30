@@ -287,7 +287,7 @@
 }
 
 /* Scope Taiwanese brand typography without changing the English HUD or subtitle. */
-#app-brand-title:lang(zh-TW) {
+#title-bar h1 > #app-brand-title:lang(zh-TW) {
   font-family: 'Microsoft JhengHei', '微軟正黑體', 'Noto Sans TC', sans-serif;
   font-size: 115%;
   font-weight: 700;
@@ -298,7 +298,9 @@
 }
 
 #title-bar #app-brand-title:lang(zh-TW) .title-accent {
-  font-weight: inherit;
+  font-family: inherit;
+  font-weight: 700;
+  font-style: normal;
 }
 
 /* Original transparent PNG: only the title logo, not the shared loader/favicon. */
