@@ -19,6 +19,7 @@ export function createMapSourceControls({
   let destroyed = false;
   let generation = 0;
   let announcedFailure = null;
+  let googleFailure = null;
   let notice, noticeText, recoveryButton;
   const removers = [];
   const bind = (element, type, listener) => {
@@ -28,6 +29,14 @@ export function createMapSourceControls({
   function render(state) {
     if (destroyed || !state) return;
     syncMapStackChips(container, state.activeId);
+    if (
+      state.activeStack?.kind === 'photoreal' &&
+      state.lastError &&
+      state.lastError !== googleFailure
+    ) {
+      googleFailure = state.lastError;
+      onError(translateKnown(state.lastError));
+    } else if (!state.lastError) googleFailure = null;
     if (
       state.imagerySuspended &&
       state.lastError &&

@@ -1,3 +1,5 @@
+import * as Cesium from 'cesium';
+import { google3DFactory } from './google3d.js';
 import { MAP_STACKS } from './catalog.js';
 import { photorealUnavailableReason } from './availability.js';
 import { keySetupRequirementEnvVars } from '../keySetupCore.mjs';
@@ -16,10 +18,16 @@ export function createDefaultMapSources({
   googleTileset = null,
   cesiumToken = '',
   googleApiKey = '',
+  googleTokens = null,
 } = {}) {
   const ionToken = String(cesiumToken || '').trim();
   const hasIon = Boolean(ionToken);
   const hasGoogle = Boolean(String(googleApiKey || '').trim());
+  const photorealFactory = google3DFactory(Cesium, {
+    cesiumToken,
+    googleApiKey,
+    googleTokens,
+  });
   const terrain = {
     id: hasIon ? 'world' : 'keyless',
     create: hasIon
@@ -44,9 +52,10 @@ export function createDefaultMapSources({
       if (descriptor.kind === 'photoreal')
         return {
           ...common,
-          available: Boolean(googleTileset),
+          available: Boolean(googleTileset || photorealFactory),
           unavailableReason: photorealUnavailableReason(hasIon || hasGoogle),
           tileset: googleTileset,
+          createTileset: photorealFactory,
         };
       const imagery =
         descriptor.kind === 'ion'
