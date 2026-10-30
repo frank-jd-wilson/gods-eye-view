@@ -61,7 +61,7 @@ test('Esri uses Re:Earth without keys and preserves ion terrain when configured'
         failedTileset.sources.find(
           ({ descriptor }) => descriptor.id === 'photoreal',
         ).available,
-        false,
+        true,
       );
     }
   } finally {

@@ -7,7 +7,6 @@ import {
 import { registerDataCredits } from '../data/dataCredits.js';
 import { configureCreditKeyboardAccess } from '../creditKeyboard.js';
 import { MapStackController } from '../mapStackController.js';
-import { loadPhotorealisticTileset } from '../mapStartup.js';
 import { initLogoGaze } from '../logoGaze.js';
 import {
   uninstallRenderGovernor,
@@ -60,47 +59,9 @@ export async function createApplicationScene({
   defer(installTrackpadPinchZoom(viewer));
   registerDataCredits(viewer, credits);
   configureCreditKeyboardAccess(document);
-  loaderStatus.textContent =
-    googleApiKey || googleTokens || cesiumToken
-      ? t('Loading Google 3D Tiles...')
-      : t('Loading the keyless globe...');
-  const photoreal = await loadPhotorealisticTileset(Cesium, {
-    googleApiKey,
-    googleTokens,
-    cesiumToken,
-  });
-  const tileset = photoreal.tileset;
-  // A provider can finish after cancellation; retain ownership of its result.
-  defer(() => {
-    if (tileset && !tileset.isDestroyed()) {
-      if (!viewer.scene.primitives.remove(tileset)) tileset.destroy();
-    }
-  });
-  signal.throwIfAborted();
-  if (tileset) {
-    viewer.scene.primitives.add(tileset);
-    // NOTE: Cesium World Terrain intentionally disabled — conflicts with Google 3D Tiles at high zoom.
-    // Google Photorealistic 3D Tiles provide their own terrain/elevation.
-    viewer.scene.globe.show = false;
-    console.info(`[Init] Google 3D Tiles loaded via ${photoreal.route}.`);
-  } else {
-    if (photoreal.errors.length) {
-      console.warn(
-        '[Init] Google 3D Tiles unavailable, using the keyless globe:',
-        'Provider unavailable; check permissions and network access.',
-      );
-      const tileErrorDetail = t(
-        'Provider unavailable. Check permissions and network access.',
-      );
-      loaderStatus.textContent = t(
-        'Google 3D Tiles unavailable ({detail}). Loading the keyless globe...',
-        {
-          detail: tileErrorDetail,
-        },
-      );
-    }
-    viewer.scene.globe.show = true;
-  }
+  // No Google requests during standard startup. The registry owns lazy loading.
+  const tileset = null;
+  viewer.scene.globe.show = true;
 
   loaderStatus.textContent = t('Initializing systems...');
 
@@ -109,7 +70,8 @@ export async function createApplicationScene({
     ...mapOptions,
     googleTileset: tileset,
     cesiumToken,
-    initialStack: tileset ? 'photoreal' : 'esri-imagery',
+    googleTokens,
+    initialStack: 'esri-imagery',
     // Task 5 (height-datum fix): rebroadcast stack changes as a window
     // CustomEvent so data layers (CCTV per-regime ground resolution) can
     // react without coupling MapStackController to layer modules. Fires on
@@ -125,12 +87,9 @@ export async function createApplicationScene({
   defer(() => mapStackController.destroy());
   // An explicit share is restored later by the existing share coordinator.
   const preferredMap = readMapPreference();
-  await mapStackController.setStack(
-    preferredMap || (tileset ? 'photoreal' : 'esri-imagery'),
-    {
-      silent: true,
-    },
-  );
+  await mapStackController.setStack(preferredMap || 'esri-imagery', {
+    silent: true,
+  });
 
   signal.throwIfAborted();
   return { viewer, tileset, mapStackController, operations };

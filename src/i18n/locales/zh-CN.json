@@ -20,9 +20,6 @@
   "Flying to Austin, TX...": "正在飞往德克萨斯州奥斯汀…",
   "Restoring shared view...": "正在恢复分享视图…",
   "Configuring viewer...": "正在配置视图…",
-  "Loading Google 3D Tiles...": "正在加载 Google 3D Tiles…",
-  "Loading the keyless globe...": "正在加载免密钥地球…",
-  "Google 3D Tiles unavailable ({detail}). Loading the keyless globe...": "Google 3D Tiles 不可用（{detail}）。正在加载免密钥地球…",
   "Initializing systems...": "正在初始化系统…",
   "Space Missions isolates replay data. Exit the mode to enable {layer}.": "太空任务模式会隔离回放数据。退出该模式后才能启用“{layer}”。",
   "Data attribution": "数据来源说明",
@@ -2895,7 +2892,6 @@
   "3D Terrain": "3D Terrain",
   "Google 3D supplies its own terrain. Select Esri or OSM to choose terrain.": "Google 3D supplies its own terrain. Select Esri or OSM to choose terrain.",
   "Use free terrain": "Use free terrain",
-  "Provider unavailable. Check permissions and network access.": "Provider unavailable. Check permissions and network access.",
   "Configured only; token permissions have not been verified.": "Configured only; token permissions have not been verified.",
   "Save failed. Check the local development server and try again.": "Save failed. Check the local development server and try again.",
   "Buildings: Cesium ion rejected the token (401).": "Buildings: Cesium ion rejected the token (401).",
@@ -2916,5 +2912,12 @@
   "Building features are visible. Imagery and terrain remain enabled.": "Building features are visible. Imagery and terrain remain enabled.",
   "Buildings tileset loaded. Zoom into a city and tilt the camera to inspect coverage.": "Buildings tileset loaded. Zoom into a city and tilt the camera to inspect coverage.",
   "Retry buildings": "Retry buildings",
-  "Buildings network request failed. Imagery and terrain are unchanged.": "Buildings network request failed. Imagery and terrain are unchanged."
+  "Buildings network request failed. Imagery and terrain are unchanged.": "Buildings network request failed. Imagery and terrain are unchanged.",
+  "Google 3D needs an applied Cesium ion token with asset 2275207 access, or an existing Google provider.": "Google 3D needs an applied Cesium ion token with asset 2275207 access, or an existing Google provider.",
+  "Google 3D: Cesium ion rejected the token (401). Standard mode is preserved; select Google 3D to retry.": "Google 3D: Cesium ion rejected the token (401). Standard mode is preserved; select Google 3D to retry.",
+  "Google 3D: authorize asset 2275207 and check allowed URLs (403). Select Google 3D to retry.": "Google 3D: authorize asset 2275207 and check allowed URLs (403). Select Google 3D to retry.",
+  "Google 3D: request quota or rate limit reached (429). Check usage before retrying.": "Google 3D: request quota or rate limit reached (429). Check usage before retrying.",
+  "Google 3D timed out. Standard mode is preserved; select Google 3D to retry.": "Google 3D timed out. Standard mode is preserved; select Google 3D to retry.",
+  "Google 3D tile loading failed. Returning to standard mode; select Google 3D to retry.": "Google 3D tile loading failed. Returning to standard mode; select Google 3D to retry.",
+  "Google 3D could not be loaded. Check network access and asset permissions, then select Google 3D to retry.": "Google 3D could not be loaded. Check network access and asset permissions, then select Google 3D to retry."
 }

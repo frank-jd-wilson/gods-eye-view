@@ -20,9 +20,6 @@
   "Flying to Austin, TX...": "正在飛往德克薩斯州奧斯汀…",
   "Restoring shared view...": "正在還原分享視角…",
   "Configuring viewer...": "正在設定檢視器…",
-  "Loading Google 3D Tiles...": "正在載入 Google 3D Tiles…",
-  "Loading the keyless globe...": "正在載入免金鑰地球…",
-  "Google 3D Tiles unavailable ({detail}). Loading the keyless globe...": "Google 3D Tiles 不可用（{detail}）。正在載入免金鑰地球…",
   "Initializing systems...": "正在初始化系統…",
   "Space Missions isolates replay data. Exit the mode to enable {layer}.": "太空任務模式會隔離重播資料。退出該模式後才能啟用「{layer}」。",
   "Data attribution": "資料來源標示",
@@ -2895,7 +2892,6 @@
   "3D Terrain": "3D 地形",
   "Google 3D supplies its own terrain. Select Esri or OSM to choose terrain.": "Google 3D 自帶地形。請選擇 Esri 或 OSM 後再選取地形。",
   "Use free terrain": "使用免費地形",
-  "Provider unavailable. Check permissions and network access.": "服務無法使用。請檢查權限與網路連線。",
   "Configured only; token permissions have not been verified.": "僅表示已設定，尚未驗證 Token 權限。",
   "Save failed. Check the local development server and try again.": "儲存失敗。請檢查本機開發伺服器後再試一次。",
   "Buildings: Cesium ion rejected the token (401).": "建築物：Cesium ion 拒絕此 Token（401）。",
@@ -2916,5 +2912,12 @@
   "Building features are visible. Imagery and terrain remain enabled.": "可見建築物已載入，影像與地形仍保持啟用。",
   "Buildings tileset loaded. Zoom into a city and tilt the camera to inspect coverage.": "建築物模型已載入。請放大至城市並傾斜視角以檢查資料涵蓋範圍。",
   "Retry buildings": "重試建築物",
-  "Buildings network request failed. Imagery and terrain are unchanged.": "建築物網路請求失敗，影像與地形保持不變。"
+  "Buildings network request failed. Imagery and terrain are unchanged.": "建築物網路請求失敗，影像與地形保持不變。",
+  "Google 3D needs an applied Cesium ion token with asset 2275207 access, or an existing Google provider.": "Google 3D 需要已套用且可存取資產 2275207 的 Cesium ion Token，或既有 Google 服務。",
+  "Google 3D: Cesium ion rejected the token (401). Standard mode is preserved; select Google 3D to retry.": "Google 3D：Cesium ion 拒絕此 Token（401）。標準模式保留；請再次選擇 Google 3D 以重試。",
+  "Google 3D: authorize asset 2275207 and check allowed URLs (403). Select Google 3D to retry.": "Google 3D：請授權資產 2275207 並檢查允許的來源網址（403）。可再次選擇 Google 3D 以重試。",
+  "Google 3D: request quota or rate limit reached (429). Check usage before retrying.": "Google 3D：已達請求配額或速率限制（429）。請先檢查用量再重試。",
+  "Google 3D timed out. Standard mode is preserved; select Google 3D to retry.": "Google 3D 請求逾時。標準模式保留；可再次選擇 Google 3D 以重試。",
+  "Google 3D tile loading failed. Returning to standard mode; select Google 3D to retry.": "Google 3D 圖磚載入失敗，正在返回標準模式；可再次選擇 Google 3D 以重試。",
+  "Google 3D could not be loaded. Check network access and asset permissions, then select Google 3D to retry.": "無法載入 Google 3D。請檢查網路連線與資產權限，再次選擇 Google 3D 以重試。"
 }

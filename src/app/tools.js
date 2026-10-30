@@ -73,7 +73,13 @@ export function createApplicationTools({
   // lifetime. The tileset lets the layer drape while the globe is hidden.
   const recentImagery = dataManager.layers.get('recent-imagery')?.module;
   if (recentImagery) {
-    recentImagery.attachTileset(tileset);
+    const syncImageryHost = () =>
+      recentImagery.attachTileset(
+        mapStackController?.getImageryHostTileset?.() || tileset,
+      );
+    syncImageryHost();
+    const stopImageryHost = mapStackController?.subscribe?.(syncImageryHost);
+    if (stopImageryHost) defer(stopImageryHost);
     const imageryBoxTool = initImageryBoxTool({
       viewer,
       onBox: (box) => recentImagery.setBox(box),
@@ -166,7 +172,9 @@ export function createApplicationTools({
   window.__godsEyeView = {
     viewer,
     styleManager,
-    tileset,
+    get tileset() {
+      return mapStackController?.getImageryHostTileset?.() || tileset;
+    },
     dataManager,
     sceneDirector,
     mapStackController,

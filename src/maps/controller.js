@@ -1,3 +1,4 @@
+import { google3DFailure } from './google3d.js';
 import { ionFailure } from './ionStatus.js';
 import { indexMapSources } from './registry.js';
 import * as Cesium from 'cesium';
@@ -51,6 +52,9 @@ export class MapSourceController {
     this._terrainProviders = new Map();
     this._tilesets = new Map();
     this._ownedTilesets = new Set();
+    this._failedTilesets = new WeakSet();
+    this._tilesetErrorRemovers = new Map();
+    this._previousGlobeId = null;
     this._disposed = new WeakSet();
     this._switchGen = 0;
     /** Who chose the current generation's stack: 'manual' | 'automatic'. */
@@ -209,6 +213,18 @@ export class MapSourceController {
     this._lastError = null;
     if (!silent) this._emitChange('switching');
     try {
+      if (retry && stack.kind === 'photoreal') {
+        const old = await this._tilesets.get(stack.id);
+        if (gen !== this._switchGen) return this.getState();
+        if (old && this._failedTilesets.has(old)) {
+          this._tilesetErrorRemovers.get(old)?.();
+          this._tilesetErrorRemovers.delete(old);
+          this._tilesets.delete(stack.id);
+          this._ownedTilesets.delete(old);
+          this.viewer.scene.primitives.remove(old);
+          this._dispose(old);
+        }
+      }
       if (retry) {
         const cached = await this._imageryProviders.get(stack.id);
         if (gen !== this._switchGen) return this.getState();
@@ -229,9 +245,12 @@ export class MapSourceController {
       if (!silent) this._emitChange('ready');
     } catch (error) {
       if (gen !== this._switchGen) return this.getState();
-      const message = stack.requiresIon
-        ? ionFailure(error)
-        : error?.message || String(error);
+      const message =
+        stack.kind === 'photoreal'
+          ? google3DFailure(error)
+          : stack.requiresIon
+            ? ionFailure(error)
+            : error?.message || String(error);
       this._lastError = message;
       this._onError?.(message, stack);
       const recovery = this.getStack(this._registry.recoveryId);
@@ -285,6 +304,31 @@ export class MapSourceController {
       tileset.show = false;
       this.viewer.scene.primitives.add(tileset);
       this._ownedTilesets.add(tileset);
+    }
+    if (this._sources.get(this._activeId)?.imagery)
+      this._previousGlobeId = this._activeId;
+    if (
+      source.descriptor.kind === 'photoreal' &&
+      !this._tilesetErrorRemovers.has(tileset)
+    ) {
+      const remove = tileset.tileFailed?.addEventListener?.((error) => {
+        if (
+          this._destroyed ||
+          !tileset.show ||
+          this._failedTilesets.has(tileset) ||
+          this._activeId !== source.descriptor.id
+        )
+          return;
+        this._failedTilesets.add(tileset);
+        this._lastError = google3DFailure(error, true);
+        this._onError?.(this._lastError, source.descriptor);
+        this._emitChange('error');
+        const previous = this._previousGlobeId;
+        if (this._sources.get(previous)?.imagery) {
+          void this.setStack(previous, { [AUTOMATIC]: true });
+        }
+      });
+      this._tilesetErrorRemovers.set(tileset, remove || (() => {}));
     }
     this._removeImageryLayer();
     this._credits.show(source.credit || null);
@@ -692,6 +736,8 @@ export class MapSourceController {
     if (this._destroyed) return;
     this._destroyed = true;
     this._subscribers.clear();
+    for (const remove of this._tilesetErrorRemovers.values()) remove();
+    this._tilesetErrorRemovers.clear();
     this._switchGen++;
     this._abort.abort();
     clearTimeout(this._retryTimer);

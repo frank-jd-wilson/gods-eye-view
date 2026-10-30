@@ -3,9 +3,6 @@
   "Restoring shared view...": "Восстановление общего вида...",
   "Initializing systems...": "Инициализация систем...",
   "Configuring viewer...": "Настройка просмотрщика...",
-  "Loading Google 3D Tiles...": "Загрузка Google 3D Tiles...",
-  "Loading the keyless globe...": "Загрузка глобуса без ключа...",
-  "Google 3D Tiles unavailable ({detail}). Loading the keyless globe...": "Google 3D Tiles недоступны ({detail}). Загрузка глобуса без ключа...",
   "Close data attribution": "Закрыть атрибуцию данных",
   "observed or mapped nearby context": "наблюдаемая или картографическая обстановка",
   "no observed or mapped objects in current feeds": "нет наблюдаемых или картографированных объектов в текущих потоках",
@@ -3102,7 +3099,6 @@
   "3D Terrain": "3D Terrain",
   "Google 3D supplies its own terrain. Select Esri or OSM to choose terrain.": "Google 3D supplies its own terrain. Select Esri or OSM to choose terrain.",
   "Use free terrain": "Use free terrain",
-  "Provider unavailable. Check permissions and network access.": "Provider unavailable. Check permissions and network access.",
   "Configured only; token permissions have not been verified.": "Configured only; token permissions have not been verified.",
   "Save failed. Check the local development server and try again.": "Save failed. Check the local development server and try again.",
   "Buildings: Cesium ion rejected the token (401).": "Buildings: Cesium ion rejected the token (401).",
@@ -3123,5 +3119,12 @@
   "Building features are visible. Imagery and terrain remain enabled.": "Building features are visible. Imagery and terrain remain enabled.",
   "Buildings tileset loaded. Zoom into a city and tilt the camera to inspect coverage.": "Buildings tileset loaded. Zoom into a city and tilt the camera to inspect coverage.",
   "Retry buildings": "Retry buildings",
-  "Buildings network request failed. Imagery and terrain are unchanged.": "Buildings network request failed. Imagery and terrain are unchanged."
+  "Buildings network request failed. Imagery and terrain are unchanged.": "Buildings network request failed. Imagery and terrain are unchanged.",
+  "Google 3D needs an applied Cesium ion token with asset 2275207 access, or an existing Google provider.": "Google 3D needs an applied Cesium ion token with asset 2275207 access, or an existing Google provider.",
+  "Google 3D: Cesium ion rejected the token (401). Standard mode is preserved; select Google 3D to retry.": "Google 3D: Cesium ion rejected the token (401). Standard mode is preserved; select Google 3D to retry.",
+  "Google 3D: authorize asset 2275207 and check allowed URLs (403). Select Google 3D to retry.": "Google 3D: authorize asset 2275207 and check allowed URLs (403). Select Google 3D to retry.",
+  "Google 3D: request quota or rate limit reached (429). Check usage before retrying.": "Google 3D: request quota or rate limit reached (429). Check usage before retrying.",
+  "Google 3D timed out. Standard mode is preserved; select Google 3D to retry.": "Google 3D timed out. Standard mode is preserved; select Google 3D to retry.",
+  "Google 3D tile loading failed. Returning to standard mode; select Google 3D to retry.": "Google 3D tile loading failed. Returning to standard mode; select Google 3D to retry.",
+  "Google 3D could not be loaded. Check network access and asset permissions, then select Google 3D to retry.": "Google 3D could not be loaded. Check network access and asset permissions, then select Google 3D to retry."
 }

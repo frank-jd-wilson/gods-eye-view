@@ -173,7 +173,14 @@
     "Building features are visible. Imagery and terrain remain enabled.",
     "Buildings tileset loaded. Zoom into a city and tilt the camera to inspect coverage.",
     "Retry buildings",
-    "Buildings network request failed. Imagery and terrain are unchanged."
+    "Buildings network request failed. Imagery and terrain are unchanged.",
+    "Google 3D needs an applied Cesium ion token with asset 2275207 access, or an existing Google provider.",
+    "Google 3D: Cesium ion rejected the token (401). Standard mode is preserved; select Google 3D to retry.",
+    "Google 3D: authorize asset 2275207 and check allowed URLs (403). Select Google 3D to retry.",
+    "Google 3D: request quota or rate limit reached (429). Check usage before retrying.",
+    "Google 3D timed out. Standard mode is preserved; select Google 3D to retry.",
+    "Google 3D tile loading failed. Returning to standard mode; select Google 3D to retry.",
+    "Google 3D could not be loaded. Check network access and asset permissions, then select Google 3D to retry."
   ],
   "ru": [
     "AIS: --",
@@ -242,7 +249,14 @@
     "Building features are visible. Imagery and terrain remain enabled.",
     "Buildings tileset loaded. Zoom into a city and tilt the camera to inspect coverage.",
     "Retry buildings",
-    "Buildings network request failed. Imagery and terrain are unchanged."
+    "Buildings network request failed. Imagery and terrain are unchanged.",
+    "Google 3D needs an applied Cesium ion token with asset 2275207 access, or an existing Google provider.",
+    "Google 3D: Cesium ion rejected the token (401). Standard mode is preserved; select Google 3D to retry.",
+    "Google 3D: authorize asset 2275207 and check allowed URLs (403). Select Google 3D to retry.",
+    "Google 3D: request quota or rate limit reached (429). Check usage before retrying.",
+    "Google 3D timed out. Standard mode is preserved; select Google 3D to retry.",
+    "Google 3D tile loading failed. Returning to standard mode; select Google 3D to retry.",
+    "Google 3D could not be loaded. Check network access and asset permissions, then select Google 3D to retry."
   ],
   "zh-CN": [
     "1090 MHz",
@@ -350,7 +364,14 @@
     "Building features are visible. Imagery and terrain remain enabled.",
     "Buildings tileset loaded. Zoom into a city and tilt the camera to inspect coverage.",
     "Retry buildings",
-    "Buildings network request failed. Imagery and terrain are unchanged."
+    "Buildings network request failed. Imagery and terrain are unchanged.",
+    "Google 3D needs an applied Cesium ion token with asset 2275207 access, or an existing Google provider.",
+    "Google 3D: Cesium ion rejected the token (401). Standard mode is preserved; select Google 3D to retry.",
+    "Google 3D: authorize asset 2275207 and check allowed URLs (403). Select Google 3D to retry.",
+    "Google 3D: request quota or rate limit reached (429). Check usage before retrying.",
+    "Google 3D timed out. Standard mode is preserved; select Google 3D to retry.",
+    "Google 3D tile loading failed. Returning to standard mode; select Google 3D to retry.",
+    "Google 3D could not be loaded. Check network access and asset permissions, then select Google 3D to retry."
   ],
   "zh-TW": [
     "1090 MHz",
