@@ -1268,6 +1268,10 @@ export class StyleManager extends ShellFacade {
       },
       cctv: cctvLayer,
       actions: {
+        onStateChange: () => {
+          this._dataManager?.refreshLayerStats();
+          this.services.governorRequestRender?.('cctv-state');
+        },
         isEnabled: () => this._dataManager?.isEnabled('cctv'),
         setParams: (params, options) =>
           this._dataManager?.setLayerParams('cctv', params, options),

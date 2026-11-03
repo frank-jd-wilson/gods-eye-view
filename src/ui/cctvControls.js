@@ -65,9 +65,11 @@ export class CctvControls {
     this._cctvUnsubscribe?.();
     this._cctvUnsubscribe = null;
     if (this.destroyed) return;
-    this._cctvUnsubscribe = this.cctv.subscribe?.((state) =>
-      this._renderCctvState(state),
-    );
+    this._cctvUnsubscribe = this.cctv.subscribe?.((state) => {
+      if (this.destroyed) return;
+      this._renderCctvState(state);
+      this.actions.onStateChange?.();
+    });
     if (this.cctv.getUIState) this._renderCctvState(this.cctv.getUIState());
   }
   _clearCctvFrame(...args) {

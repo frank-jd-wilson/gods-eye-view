@@ -221,3 +221,22 @@ test('disposing during camera enable prevents the delayed focus and future click
   assert.equal(enables, 1);
   assert.equal(focuses, 0);
 });
+
+test('asynchronous CCTV progress publishes updates and rejects callbacks after destroy', (t) => {
+  const { controls } = fixture(t);
+  let listener;
+  let updates = 0;
+  controls.cctv.subscribe = (callback) => {
+    listener = callback;
+    return () => {};
+  };
+  controls._renderCctvState = () => {};
+  controls.actions.onStateChange = () => updates++;
+  controls.connect();
+  listener({ loading: true });
+  listener({ loading: false });
+  assert.equal(updates, 2);
+  controls.destroy();
+  listener({ loading: true });
+  assert.equal(updates, 2);
+});
