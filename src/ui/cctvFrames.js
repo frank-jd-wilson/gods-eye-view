@@ -9,6 +9,7 @@ import { msg, t } from '../i18n/index.js';
 
 const SOURCE_KIND_LABELS = Object.freeze({
   snapshot: msg('SNAPSHOT'),
+  clip: msg('RECORDED CLIP'),
   live: msg('LIVE'),
   fallback: msg('FALLBACK'),
   upstream: msg('UPSTREAM'),
@@ -27,6 +28,7 @@ const SOURCE_STATUS_LABELS = Object.freeze({
 });
 
 const SOURCE_MESSAGES = Object.freeze({
+  'Recorded video clip connected': msg('Recorded video clip connected'),
   'Live HLS connected': msg('Live HLS connected'),
   'Live HLS unavailable': msg('Live HLS unavailable'),
   'No stream URL configured': msg('No stream URL configured'),

@@ -202,6 +202,7 @@
       "server/providers/cctv/cap.js",
       "server/providers/cctv/groundHeights.js",
       "server/providers/cctv/catalog.js",
+      "server/providers/cctv/tflResilience.js",
       "server/providers/cctv/lithuania.js",
       "server/providers/cctv/taiwan.js",
       "server/providers/cctv/constants.js",
@@ -559,6 +560,7 @@
   "cctv-controls": {
     "exports": ["./ui/cctv"],
     "modules": [
+      "src/layers/cctv/tflStatus.js",
       "src/ui/cctv.js",
       "src/ui/cctvBindings.js",
       "src/ui/cctvCalibration.js",
@@ -659,6 +661,7 @@
   "ui-shell": {
     "exports": ["./ui/shell"],
     "modules": [
+      "src/layers/cctv/tflStatus.js",
       "src/i18n/marker.js",
       "src/ui/mobileShell.js",
       "src/exclusiveSurfaces.js",
@@ -1418,6 +1421,7 @@
       "src/layers/cctv/calibration.js",
       "src/layers/cctv/cards.js",
       "src/layers/cctv/catalog.js",
+      "src/layers/cctv/tflStatus.js",
       "src/layers/cctv/controls.js",
       "src/layers/cctv/frames.js",
       "src/layers/cctv/geometry.js",
@@ -2007,6 +2011,7 @@
       "src/layers/cctv/calibration.js",
       "src/layers/cctv/cards.js",
       "src/layers/cctv/catalog.js",
+      "src/layers/cctv/tflStatus.js",
       "src/layers/cctv/controls.js",
       "src/layers/cctv/frames.js",
       "src/layers/cctv/geometry.js",
@@ -2825,6 +2830,7 @@
       "src/layers/cctv/calibration.js",
       "src/layers/cctv/cards.js",
       "src/layers/cctv/catalog.js",
+      "src/layers/cctv/tflStatus.js",
       "src/layers/cctv/controls.js",
       "src/layers/cctv/frames.js",
       "src/layers/cctv/geometry.js",

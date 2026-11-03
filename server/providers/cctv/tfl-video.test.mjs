@@ -29,6 +29,7 @@ test('TfL uses official MP4 footage and retains snapshot fallback without accept
           ],
         })),
       ),
+      { headers: { 'Content-Type': 'application/json' } },
     );
   const cameras = await loadTflSourcesFromOpenData();
   assert.equal(cameras.length, 4);

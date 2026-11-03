@@ -1,3 +1,4 @@
+import { tflDirectoryMessage } from '../layers/cctv/tflStatus.js';
 import { updateStatusBadge } from './statusBadge.js';
 import { t, tn } from '../i18n/index.js';
 import { cctvSourceLabelText, cctvSourceMessageText } from './cctvFrames.js';
@@ -197,6 +198,23 @@ export function _renderCctvState(state) {
         'Enable CCTV to load camera intersections',
       );
     }
+  }
+
+  const sourceNotice = this._cctvPanel?.querySelector?.('#cctv-tfl-status');
+  if (sourceNotice) {
+    sourceNotice.textContent = tflDirectoryMessage(state?.tflStatus);
+    sourceNotice.hidden = !enabled || !sourceNotice.textContent;
+  }
+  if (this._cctvMeta && activeCamera?.mediaError) {
+    this._cctvMeta.textContent +=
+      ' · ' +
+      (activeCamera.mediaError === 'decode'
+        ? t('TfL video could not be decoded; showing a snapshot.')
+        : t('TfL video URL or connection failed; showing a snapshot.'));
+  }
+  if (this._cctvMeta && activeCamera?.stalePositionOnly) {
+    this._cctvMeta.textContent +=
+      ' · ' + t('Expired position only; no live media.');
   }
 
   const liveIntent = enabled && !!activeCamera?.isVideo;

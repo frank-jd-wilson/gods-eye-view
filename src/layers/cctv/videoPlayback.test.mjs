@@ -128,3 +128,32 @@ test('finite video feeds retain looping while live HLS does not loop', async () 
     }
   }
 });
+
+test('video errors distinguish decode from media failure before teardown clears the error', async () => {
+  for (const [code, expected] of [
+    [3, 'decode'],
+    [2, 'media'],
+    [4, 'media'],
+  ]) {
+    const source = video();
+    source.error = { code };
+    source.load = () => {
+      source.error = null;
+    };
+    let reason;
+    const playback = attachCctvVideo(
+      source,
+      '/api/cctv/media/tfl-test',
+      'mp4',
+      {
+        onFailure: (value) => {
+          reason = value;
+        },
+      },
+    );
+    await playback.ready;
+    source.dispatchEvent(new Event('error'));
+    assert.equal(reason, expected);
+    playback.dispose();
+  }
+});

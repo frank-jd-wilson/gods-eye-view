@@ -1,3 +1,4 @@
+import { readTflStatus } from './tflStatus.js';
 import { HEALTH_SYNC_INTERVAL_MS } from './policy.js';
 
 export function createHealth({ state: layerState, services, parts, source }) {
@@ -17,6 +18,19 @@ export function createHealth({ state: layerState, services, parts, source }) {
       const signal = layerState._sourceAbort?.signal;
       const data = await source.getHealth({ signal });
       signal?.throwIfAborted();
+      if (data.sourceStatuses !== undefined)
+        layerState._tflStatus = readTflStatus(data.sourceStatuses);
+      if (['unavailable', 'stale'].includes(layerState._tflStatus?.state)) {
+        for (const record of layerState._records) {
+          if (record.camera.sourceKind !== 'tfl-open-data') continue;
+          record.camera.stalePositionOnly = true;
+          record.projection?.playback?.dispose?.();
+          if (record.projection) {
+            record.projection.video = null;
+            record.projection.mode = 'image';
+          }
+        }
+      }
       const rows = Array.isArray(data?.cameras) ? data.cameras : [];
       const next = new Map();
       for (const row of rows) {

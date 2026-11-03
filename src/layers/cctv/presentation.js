@@ -140,15 +140,20 @@ export function createPresentation({
       mountHeightM: camera.mountHeightM,
       active: isActive,
       feedType: camera.feedType,
+      mediaError: record.mediaError || null,
+      stalePositionOnly: camera.stalePositionOnly === true,
       isVideo:
         parts.model.isVideoFeedType(camera.feedType) &&
         record.projection?.mode !== 'image',
-      sourceKind:
-        health?.sourceKind ||
-        camera.sourceKind ||
-        (camera.feedConfigured ? 'configured' : 'seed'),
-      sourceStatus: health?.status || 'unknown',
-      sourceMessage: health?.message || '',
+      sourceKind: camera.stalePositionOnly
+        ? 'snapshot'
+        : health?.sourceKind ||
+          camera.sourceKind ||
+          (camera.feedConfigured ? 'configured' : 'seed'),
+      sourceStatus: camera.stalePositionOnly
+        ? 'error'
+        : health?.status || 'unknown',
+      sourceMessage: camera.stalePositionOnly ? '' : health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
       credit: camera.credit || '',
       calibration: {
@@ -205,6 +210,7 @@ export function createPresentation({
       count: layerState._count,
       lastUpdate: layerState._lastUpdate,
       error: layerState._lastError,
+      tflStatus: layerState._tflStatus,
       loading: {
         active: layerState._geoLoading,
         loaded: Math.min(layerState._geoLoadDone, layerState._geoLoadTotal),

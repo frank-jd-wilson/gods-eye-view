@@ -148,7 +148,8 @@ export function createFrames({ state: layerState, services, parts, source }) {
 
   function refreshProjectionTextures(record) {
     const runtime = record?.projection;
-    if (!runtime || runtime.mode === 'video') return;
+    if (!runtime || runtime.mode === 'video' || record.camera.stalePositionOnly)
+      return;
     const now = Date.now();
     if (
       now - parts.model.safeNumber(runtime.lastTextureSwapAt, 0) <
@@ -245,7 +246,13 @@ export function createFrames({ state: layerState, services, parts, source }) {
 
   function refreshProjectionImage(record, force = false) {
     const runtime = record?.projection;
-    if (!runtime || runtime.mode !== 'image' || !runtime.image) return;
+    if (
+      !runtime ||
+      runtime.mode !== 'image' ||
+      !runtime.image ||
+      record.camera.stalePositionOnly
+    )
+      return;
     // Hidden-state gate (perf wave 2): no new frame fetch/decode for a canvas
     // nobody can see. The refresh interval re-fills naturally on return.
     if (typeof document !== 'undefined' && document.hidden && !force) return;

@@ -1,3 +1,4 @@
+import { setLocale } from '../i18n/index.js';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CctvControls } from './cctvControls.js';
@@ -239,4 +240,19 @@ test('asynchronous CCTV progress publishes updates and rejects callbacks after d
   controls.destroy();
   listener({ loading: true });
   assert.equal(updates, 2);
+});
+
+test('source notices repaint on locale change and release the locale listener on destroy', (t) => {
+  const { controls } = fixture(t);
+  setLocale('en');
+  t.after(() => setLocale('en'));
+  let renders = 0;
+  controls._renderCctvState = () => renders++;
+  controls.connect();
+  setLocale('zh-TW');
+  assert.equal(renders, 1);
+  controls.destroy();
+  const before = renders;
+  setLocale('en');
+  assert.equal(renders, before);
 });

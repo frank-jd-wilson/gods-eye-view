@@ -72,8 +72,9 @@ export function attachCctvVideo(
   };
   const fail = () => {
     if (disposed) return;
+    const reason = video.error?.code === 3 ? 'decode' : 'media';
     dispose();
-    onFailure();
+    onFailure(reason);
   };
   const play = () => {
     if (disposed) return;

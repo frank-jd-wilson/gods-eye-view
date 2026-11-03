@@ -152,8 +152,27 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           sources.map((source) => [source.id, source]),
         );
 
+        const staleMatch = /^\/(?:frame|media|stream)\/(.+)$/.exec(
+          url.pathname,
+        );
+        if (
+          staleMatch &&
+          sourceById.get(decodeURIComponent(staleMatch[1]))?.stalePositionOnly
+        ) {
+          res.writeHead(503, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'no-store',
+          });
+          res.end(
+            JSON.stringify({
+              error: 'TfL media unavailable; retained positions only',
+            }),
+          );
+          return;
+        }
         if (url.pathname === '/sources') {
           const body = {
+            sourceStatuses: getCctvSources.sourceStatuses?.(sources) ?? [],
             trimmedPacks: getCctvSources.trimmedPacks?.(sources) ?? [],
             sources: sources.map((source) => ({
               id: source.id,
@@ -171,6 +190,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               rangeM: source.rangeM,
               mountHeightM: source.mountHeightM,
               groundElevationM: source.groundElevationM,
+              stalePositionOnly: source.stalePositionOnly === true,
               feedType: normalizeFeedType(source.feedType),
               sourceKind:
                 source.sourceKind || (source.url ? 'configured' : 'fallback'),
@@ -196,7 +216,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             'Content-Type': 'application/json',
             'Cache-Control': 'no-store',
           });
-          res.end(JSON.stringify({ cameras: listHealth() }));
+          res.end(
+            JSON.stringify({
+              cameras: listHealth(),
+              sourceStatuses: getCctvSources.sourceStatuses?.(sources) ?? [],
+            }),
+          );
           return;
         }
 
@@ -444,11 +469,21 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             }
             setHealth(cameraId, {
               status: 'ok',
-              sourceKind: isVideoFeedType(feedType) ? 'live' : 'snapshot',
+              sourceKind:
+                source?.sourceKind === 'tfl-open-data' &&
+                isVideoFeedType(feedType)
+                  ? 'clip'
+                  : isVideoFeedType(feedType)
+                    ? 'live'
+                    : 'snapshot',
               label: source?.provider || 'Configured source',
-              message: isVideoFeedType(feedType)
-                ? 'Live stream connected'
-                : 'Snapshot feed connected',
+              message:
+                source?.sourceKind === 'tfl-open-data' &&
+                isVideoFeedType(feedType)
+                  ? 'Recorded video clip connected'
+                  : isVideoFeedType(feedType)
+                    ? 'Live stream connected'
+                    : 'Snapshot feed connected',
             });
 
             await proxyMediaResponse(res, upstream, {

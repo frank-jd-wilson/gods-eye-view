@@ -1,3 +1,4 @@
+import { createTflPositionCache } from './tflResilience.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DEFAULT_CCTV_SOURCE_FILE, CCTV_SOURCE_CACHE_MS } from './constants.js';
@@ -208,9 +209,24 @@ function loadSourcesFromEnv() {
 }
 
 /** Create an independent catalog rooted in the consuming application. */
-export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
+export function createCctvCatalog({
+  sourceRoot = process.cwd(),
+  livePacks = LIVE_PACKS,
+  clock = Date.now,
+} = {}) {
   /** @type {Array<object>} Cached merged + normalized CCTV source list. */
   let _cctvSourceCache = [];
+  const sourceStatuses = new WeakMap();
+  const configuredRetention = Number(
+    process.env.CCTV_TFL_POSITION_RETENTION_MS,
+  );
+  const retainTflPositions = createTflPositionCache({
+    now: clock,
+    retentionMs:
+      Number.isFinite(configuredRetention) && configuredRetention > 0
+        ? Math.min(configuredRetention, 24 * 60 * 60 * 1000)
+        : 0,
+  });
   /** @type {number} Epoch-ms when the source cache was last refreshed. */
   let _cctvSourceCacheAt = 0;
   /** @type {Promise<Array<object>>|null} In-flight refresh, shared by concurrent
@@ -233,7 +249,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
    * @returns {Promise<Array<object>>} Deduplicated, capped source list.
    */
   async function getCctvSources() {
-    const now = Date.now();
+    const now = clock();
     if (
       _cctvSourceCache.length &&
       now - _cctvSourceCacheAt <= CCTV_SOURCE_CACHE_MS
@@ -253,7 +269,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       // that keeps failing is retried once per TTL, not back to back.
       if (_cctvSourceCache.length) {
         _cctvSourceInflight.catch((error) => {
-          _cctvSourceCacheAt = Date.now();
+          _cctvSourceCacheAt = clock();
           console.warn(
             '[CCTV] background catalog refresh failed; serving',
             _cctvSourceCache.length,
@@ -287,7 +303,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       String(process.env.CCTV_PREFER_AUSTIN || '1').trim() !== '0';
     // Live open-data packs load unless a file/env pack is configured and live
     // packs aren't forced — the same gate that governed the Austin-only fetch
-    // now governs every entry in LIVE_PACKS.
+    // now governs every entry in livePacks.
     const needsLiveSources =
       forceAustin || (fromFile.length + fromEnv.length === 0 && preferAustin);
     const liveResults = needsLiveSources
@@ -295,20 +311,42 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
           // Invoked inside the promise so a loader that throws synchronously
           // (a file-based pack on a malformed row) is isolated like any other
           // failed pack instead of rejecting the whole refresh.
-          LIVE_PACKS.map((pack) =>
+          livePacks.map((pack) =>
             Promise.resolve().then(() =>
               pack.enabled() ? pack.load({ sourceRoot }) : [],
             ),
           ),
         )
       : [];
+    const tflIndex = livePacks.findIndex((pack) => pack.name === 'tfl');
+    const tflOutcome = liveResults[tflIndex];
+    const tflRows = tflOutcome?.status === 'fulfilled' ? tflOutcome.value : [];
+    if (needsLiveSources && tflOutcome?.status === 'rejected') {
+      tflRows.sourceStatus = {
+        pack: 'tfl',
+        state: 'unavailable',
+        code: 'network',
+        httpStatus: null,
+      };
+    }
+    const tfl = retainTflPositions(tflRows, {
+      disabled: !needsLiveSources || !livePacks[tflIndex].enabled(),
+    });
+    if (needsLiveSources && livePacks[tflIndex].enabled())
+      liveResults[tflIndex] = { status: 'fulfilled', value: tfl.rows };
     // Live packs first so file/env overrides win on duplicate IDs; each pack
     // keeps its own priority order and the catalog cap is shared fairly.
     const normalizePack = (name, items) => ({
       name,
       sources: items
         .filter((item) => item && typeof item === 'object')
-        .map((item) => ({ ...normalizeSourceItem(item), pack: name }))
+        .map((item) => ({
+          ...normalizeSourceItem(item),
+          pack: name,
+          ...(name === 'tfl' && item.stalePositionOnly
+            ? { stalePositionOnly: true }
+            : {}),
+        }))
         .filter((item) => item.id),
       available: Number.isFinite(items.available)
         ? items.available
@@ -316,7 +354,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
       region: items.region ?? null,
     });
     const packs = [
-      ...LIVE_PACKS.map((pack, index) =>
+      ...livePacks.map((pack, index) =>
         normalizePack(
           pack.name,
           liveResults[index]?.status === 'fulfilled'
@@ -332,7 +370,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
     // Shipped ground heights (src/data/local_data/cctv_ground_heights/, produced by
     // scripts/precompute-cctv-heights.mjs) ride along on the served source so
     // the client can place a camera and its monitor plane with zero sampling.
-    const capped = joinGroundHeights(
+    let capped = joinGroundHeights(
       allocation.sources,
       loadGroundHeights(sourceRoot),
     );
@@ -355,19 +393,19 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
         `[CCTV] source catalog exceeds cap ${maxCount}; shared round-robin across packs (${detail}). Raise CCTV_MAX_SOURCES or lower a per-pack cap to change the mix.`,
       );
     }
-    if (capped.length > 0 || _cctvSourceCache.length === 0) {
-      _cctvSourceCache = capped;
-      _cctvTrimmedPacks.set(capped, trimmedPacks);
-    } else {
-      // Every source came back empty (all live packs timed out / upstream outage)
-      // but a good catalog is already cached — serve it stale rather than blanking
-      // every CCTV route. Advancing the timestamp waits one TTL before retrying,
-      // which (with single-flight) bounds load on a persistently-down upstream.
+    // Never reintroduce old TfL media through the whole-catalog stale fallback.
+    if (!capped.length && _cctvSourceCache.length) {
+      capped = _cctvSourceCache.some((row) => row.pack === 'tfl')
+        ? _cctvSourceCache.filter((row) => row.pack !== 'tfl')
+        : _cctvSourceCache;
       console.warn(
-        `[CCTV] source refresh returned empty; serving ${_cctvSourceCache.length} stale cameras`,
+        `[CCTV] source refresh returned empty; serving ${capped.length} stale cameras`,
       );
     }
-    _cctvSourceCacheAt = Date.now();
+    sourceStatuses.set(capped, [tfl.status]);
+    _cctvSourceCache = capped;
+    _cctvTrimmedPacks.set(capped, trimmedPacks);
+    _cctvSourceCacheAt = clock();
     return _cctvSourceCache;
   }
 
@@ -376,5 +414,7 @@ export function createCctvCatalog({ sourceRoot = process.cwd() } = {}) {
    * step while a background refresh swaps the catalog. */
   getCctvSources.trimmedPacks = (sources = _cctvSourceCache) =>
     _cctvTrimmedPacks.get(sources) ?? [];
+  getCctvSources.sourceStatuses = (sources = _cctvSourceCache) =>
+    sourceStatuses.get(sources) || [];
   return getCctvSources;
 }

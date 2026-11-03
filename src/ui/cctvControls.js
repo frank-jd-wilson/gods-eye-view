@@ -1,3 +1,4 @@
+import { subscribeLocale } from '../i18n/index.js';
 import {
   _clearCctvFrame,
   _queueCctvFrame,
@@ -65,11 +66,20 @@ export class CctvControls {
     this._cctvUnsubscribe?.();
     this._cctvUnsubscribe = null;
     if (this.destroyed) return;
-    this._cctvUnsubscribe = this.cctv.subscribe?.((state) => {
+    const unsubscribeSource = this.cctv.subscribe?.((state) => {
       if (this.destroyed) return;
       this._renderCctvState(state);
       this.actions.onStateChange?.();
     });
+    const unsubscribeLocale = subscribeLocale(() => {
+      if (this.destroyed) return;
+      this._renderCctvState(this._cctvState);
+      this.actions.onStateChange?.();
+    });
+    this._cctvUnsubscribe = () => {
+      unsubscribeSource?.();
+      unsubscribeLocale();
+    };
     if (this.cctv.getUIState) this._renderCctvState(this.cctv.getUIState());
   }
   _clearCctvFrame(...args) {

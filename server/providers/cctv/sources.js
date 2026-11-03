@@ -1,3 +1,4 @@
+import { readTflResponse, tflFailure } from './tflResilience.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -403,12 +404,9 @@ export async function loadTflSourcesFromOpenData() {
       headers: { Accept: 'application/json' },
       signal: AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS),
     });
-    if (!resp.ok) {
-      console.warn('[CCTV] TfL JamCam download failed:', resp.status);
-      return [];
-    }
-    const places = await resp.json();
-    if (!Array.isArray(places)) return [];
+    const parsed = await readTflResponse(resp, readResponseTextCapped);
+    if (parsed.error) return parsed.error;
+    const places = parsed.rows;
 
     const cameras = [];
     for (const place of places) {
@@ -472,8 +470,11 @@ export async function loadTflSourcesFromOpenData() {
     );
     return prioritized;
   } catch (error) {
-    console.warn('[CCTV] TfL JamCam download error:', error?.message || error);
-    return [];
+    return tflFailure(
+      ['TimeoutError', 'AbortError'].includes(error?.name)
+        ? 'timeout'
+        : 'network',
+    );
   }
 }
 

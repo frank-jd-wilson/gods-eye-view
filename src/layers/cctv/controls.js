@@ -1,3 +1,4 @@
+import { tflDirectoryMessage } from './tflStatus.js';
 import {
   DEFAULT_UPDATE_INTERVAL_MS,
   MIN_AUTO_HOP_SEC,
@@ -240,7 +241,11 @@ export function createControls({ state: layerState, services, parts, source }) {
       return {
         count: layerState._count,
         lastUpdate: layerState._lastUpdate,
-        error: layerState._lastError,
+        error:
+          layerState._lastError ||
+          (['unavailable', 'stale'].includes(layerState._tflStatus?.state)
+            ? tflDirectoryMessage(layerState._tflStatus)
+            : null),
         loading: layerState._geoLoading,
         loadingLoaded: Math.min(
           layerState._geoLoadDone,

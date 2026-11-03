@@ -238,7 +238,9 @@ export function createProjection({
         parts.frames.mediaUrlFor(record.camera),
         feedType,
         {
-          onFailure: () => {
+          onFailure: (reason) => {
+            if (record.camera.sourceKind === 'tfl-open-data')
+              record.mediaError = reason || 'media';
             if (runtime.disposed) return;
             runtime.video = null;
             runtime.mode = 'image';
