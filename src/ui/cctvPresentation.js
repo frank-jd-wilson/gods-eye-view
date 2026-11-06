@@ -1,3 +1,4 @@
+import { renderTaiwanCctvControls } from './taiwanCctvControls.js';
 import { tflDirectoryMessage } from '../layers/cctv/tflStatus.js';
 import { updateStatusBadge } from './statusBadge.js';
 import { t, tn } from '../i18n/index.js';
@@ -27,7 +28,7 @@ export function _renderCctvState(state) {
     this._calibrationEdit?.(false);
   }
   this._cctvState = state || null;
-  const cameras = state?.cameras || [];
+  const cameras = renderTaiwanCctvControls(this, state);
   const enabled = !!state?.enabled && !!this.actions.isEnabled();
   const activeId = state?.activeCameraId || '';
   const activeCamera = state?.activeCamera || null;
@@ -205,7 +206,16 @@ export function _renderCctvState(state) {
     sourceNotice.textContent = tflDirectoryMessage(state?.tflStatus);
     sourceNotice.hidden = !enabled || !sourceNotice.textContent;
   }
-  if (this._cctvMeta && activeCamera?.mediaError) {
+  if (this._cctvMeta && activeCamera?.mediaError === 'taiwan-mjpeg') {
+    this._cctvMeta.textContent +=
+      ' · ' +
+      t('Taiwan MJPEG stream unavailable; using image fallback (not live).');
+  }
+  if (
+    this._cctvMeta &&
+    activeCamera?.mediaError &&
+    activeCamera.mediaError !== 'taiwan-mjpeg'
+  ) {
     this._cctvMeta.textContent +=
       ' · ' +
       (activeCamera.mediaError === 'decode'

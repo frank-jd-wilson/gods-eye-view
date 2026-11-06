@@ -6,7 +6,7 @@ import { allocateSourceCap, resolveCatalogCap } from './cap.js';
 import { loadGroundHeights, joinGroundHeights } from './groundHeights.js';
 import { cameraRegion, normalizeSourceItem } from './normalize.js';
 import { loadLithuaniaSources } from './lithuania.js';
-import { loadTaiwanSources } from './taiwan.js';
+import { loadTaiwanSources, taiwanSourceStatus } from './taiwan.js';
 import {
   loadAustinSourcesFromOpenData,
   loadCaltransSourcesFromOpenData,
@@ -395,14 +395,27 @@ export function createCctvCatalog({
     }
     // Never reintroduce old TfL media through the whole-catalog stale fallback.
     if (!capped.length && _cctvSourceCache.length) {
-      capped = _cctvSourceCache.some((row) => row.pack === 'tfl')
-        ? _cctvSourceCache.filter((row) => row.pack !== 'tfl')
+      capped = _cctvSourceCache.some(
+        (row) => row.pack === 'tfl' || row.pack === 'taiwan',
+      )
+        ? _cctvSourceCache.filter(
+            (row) => row.pack !== 'tfl' && row.pack !== 'taiwan',
+          )
         : _cctvSourceCache;
       console.warn(
         `[CCTV] source refresh returned empty; serving ${capped.length} stale cameras`,
       );
     }
-    sourceStatuses.set(capped, [tfl.status]);
+    sourceStatuses.set(capped, [
+      tfl.status,
+      {
+        ...taiwanSourceStatus(),
+        ...(!needsLiveSources ||
+        !livePacks.some((pack) => pack.name === 'taiwan' && pack.enabled())
+          ? { state: 'disabled' }
+          : {}),
+      },
+    ]);
     _cctvSourceCache = capped;
     _cctvTrimmedPacks.set(capped, trimmedPacks);
     _cctvSourceCacheAt = clock();

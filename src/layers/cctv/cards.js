@@ -1,3 +1,4 @@
+import { cameraMatchesTaiwanFilter } from './taiwanFilters.js';
 import {
   createFrameSlot,
   CCTV_OVERLAY_SOURCE_ID,
@@ -100,6 +101,8 @@ export function createCards({ state: layerState, services, parts, source }) {
     const candidates = [];
     const screenById = new Map();
     for (const record of layerState._records) {
+      if (!cameraMatchesTaiwanFilter(record.camera, layerState._taiwanFilter))
+        continue;
       const id = record.camera.id;
       if (id === activeId || !record.position) continue;
       let inView = false;

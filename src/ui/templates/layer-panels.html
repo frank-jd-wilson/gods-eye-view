@@ -29,6 +29,17 @@
       </div>
       <div id="cctv-source-badge" class="gev-status-badge" role="status" aria-live="polite" data-i18n>SOURCE · UNKNOWN</div>
       <div id="cctv-tfl-status" role="status" aria-live="polite" hidden></div>
+      <div id="cctv-taiwan-controls">
+        <select class="gev-field" data-tw-field="region" aria-label="Camera source" data-i18n-aria-label><option value="" data-i18n>All camera sources</option><option value="taiwan" data-i18n>Taiwan Freeway</option></select>
+        <div data-tw-details hidden>
+          <select class="gev-field" data-tw-field="playback" aria-label="Taiwan camera playback" data-i18n-aria-label><option value="mjpeg" data-i18n>MJPEG stream</option><option value="image" data-i18n>JPEG snapshot</option></select>
+          <select class="gev-field" data-tw-field="road" aria-label="Freeway" data-i18n-aria-label></select>
+          <select class="gev-field" data-tw-field="direction" aria-label="Travel direction" data-i18n-aria-label><option value="" data-i18n>All directions</option><option value="N" data-i18n>Northbound</option><option value="S" data-i18n>Southbound</option><option value="E" data-i18n>Eastbound</option><option value="W" data-i18n>Westbound</option></select>
+          <label><span data-i18n>From kilometre</span><input class="gev-field" data-tw-field="minKm" type="number" min="0" step="0.001" /></label>
+          <label><span data-i18n>To kilometre</span><input class="gev-field" data-tw-field="maxKm" type="number" min="0" step="0.001" /></label>
+        </div>
+        <div data-tw-status role="status" aria-live="polite"></div>
+      </div>
       <div id="cctv-meta" data-i18n>Enable CCTV to load camera intersections</div>
       <div class="cctv-controls">
         <button id="cctv-enable-btn" class="scene-btn" data-i18n>CCTV OFF</button>

@@ -1,4 +1,4 @@
-import { Readable } from 'node:stream';
+import { Readable, Transform } from 'node:stream';
 import { hashSeed, escapeXml, pinnedCameraUrl } from './normalize.js';
 import {
   CALGARY_IMAGE_ORIGIN,
@@ -17,6 +17,48 @@ import {
   WARENDORF_IMAGE_ORIGINS,
   WSDOT_IMAGE_ORIGIN,
 } from './constants.js';
+/** Taiwan MJPEG only: bound in-flight requests as well as relayed sessions. */
+export function createTaiwanStreamLimiter({
+  maxConcurrent = 4,
+  sessionMs = 5 * 60_000,
+} = {}) {
+  let active = 0;
+  return {
+    get active() {
+      return active;
+    },
+    acquire(res) {
+      if (active >= maxConcurrent) return null;
+      active++;
+      const controller = new AbortController();
+      let released = false;
+      const release = () => {
+        if (released) return;
+        released = true;
+        active--;
+        clearTimeout(timer);
+        res.removeListener('close', release);
+        res.removeListener('finish', release);
+        res.removeListener('error', release);
+        controller.abort();
+      };
+      const timer = setTimeout(() => {
+        release();
+        if (!res.writableEnded) {
+          if (!res.headersSent)
+            res.writeHead(504, { 'Content-Type': 'application/json' });
+          res.end();
+        }
+      }, sessionMs);
+      timer.unref?.();
+      res.once('close', release);
+      res.once('finish', release);
+      res.once('error', release);
+      return { signal: controller.signal, release };
+    },
+  };
+}
+
 /**
  * Generate a synthetic SVG billboard image for a CCTV camera placeholder.
  *
@@ -190,6 +232,8 @@ export async function proxyMediaResponse(
   upstream,
   {
     sourceHeader = 'upstream',
+    maxBytes = null,
+    onBytes = () => {},
     idleTimeoutMs = CCTV_MEDIA_IDLE_TIMEOUT_MS,
     contentType = upstream.headers.get('content-type') ||
       'application/octet-stream',
@@ -213,7 +257,7 @@ export async function proxyMediaResponse(
   // so they pipe normally (piping streams to the client, never buffering).
   if (
     Number.isFinite(Number(contentLength)) &&
-    Number(contentLength) > CCTV_MEDIA_MAX_BODY_BYTES
+    Number(contentLength) > (maxBytes ?? CCTV_MEDIA_MAX_BODY_BYTES)
   ) {
     res.writeHead(502, {
       'Content-Type': 'application/json',
@@ -230,8 +274,35 @@ export async function proxyMediaResponse(
 
   res.writeHead(upstream.status, headers);
 
-  const stream = toReadable(upstream.body);
-  if (!stream) {
+  const upstreamStream = toReadable(upstream.body);
+  let transferred = 0;
+  const counter =
+    maxBytes == null
+      ? null
+      : new Transform({
+          transform(chunk, _encoding, done) {
+            if (transferred + chunk.length > maxBytes) {
+              done(new Error('Taiwan media byte limit reached'));
+              return;
+            }
+            transferred += chunk.length;
+            onBytes(transferred);
+            done(null, chunk);
+          },
+        });
+  const stream = counter || upstreamStream;
+  if (counter && upstreamStream) {
+    upstreamStream.on('error', () =>
+      counter.destroy(new Error('Taiwan media stream failed')),
+    );
+    counter.once('close', () => upstreamStream.destroy());
+  }
+  if (!upstreamStream) {
+    if (maxBytes != null) {
+      await upstream.body?.cancel?.();
+      res.end();
+      return;
+    }
     const buf = Buffer.from(await upstream.arrayBuffer());
     res.end(buf);
     return;
@@ -283,7 +354,7 @@ export async function proxyMediaResponse(
     // A viewer who cannot keep up pauses the pipe, and no upstream bytes arrive
     // while it is paused. That is a slow client rather than a dead camera, so
     // it gets the deadline again instead of a teardown.
-    if (res.writableNeedDrain) {
+    if (maxBytes == null && res.writableNeedDrain) {
       armIdleDeadline();
       return;
     }
@@ -292,8 +363,9 @@ export async function proxyMediaResponse(
   };
   res.once('close', () => {
     clearIdleDeadline();
-    if (!res.writableEnded) releaseUpstream();
+    if (maxBytes != null || !res.writableEnded) releaseUpstream();
   });
+  if (maxBytes != null) res.once('finish', releaseUpstream);
   res.once('error', releaseUpstream);
   stream.once('end', () => {
     clearIdleDeadline();
@@ -305,6 +377,7 @@ export async function proxyMediaResponse(
   // flowing before the destination is attached would spill chunks nobody
   // forwards. Only bytes from upstream renew the deadline.
   stream.on('data', armIdleDeadline);
+  if (counter) upstreamStream.pipe(counter);
 }
 
 /**

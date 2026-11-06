@@ -18,6 +18,9 @@ export function createHealth({ state: layerState, services, parts, source }) {
       const signal = layerState._sourceAbort?.signal;
       const data = await source.getHealth({ signal });
       signal?.throwIfAborted();
+      if (Array.isArray(data.sourceStatuses))
+        layerState._taiwanStatus =
+          data.sourceStatuses.find((row) => row?.pack === 'taiwan') || null;
       if (data.sourceStatuses !== undefined)
         layerState._tflStatus = readTflStatus(data.sourceStatuses);
       if (['unavailable', 'stale'].includes(layerState._tflStatus?.state)) {

@@ -809,7 +809,7 @@ export function createGeometry({ state: layerState, services, parts, source }) {
       destroyViewshedVolume(record);
     }
 
-    for (const runtime of layerState._projectionEntities) {
+    for (const runtime of [...layerState._projectionEntities]) {
       parts.projection.destroyProjectionRuntime(runtime);
     }
     layerState._projectionEntities = [];

@@ -128,6 +128,9 @@ export function createCatalog({ state: layerState, services, parts, source }) {
       const signal = layerState._sourceAbort?.signal;
       const data = await source.getCatalog({ signal });
       signal?.throwIfAborted();
+      layerState._taiwanStatus = Array.isArray(data?.sourceStatuses)
+        ? data.sourceStatuses.find((row) => row?.pack === 'taiwan') || null
+        : null;
       layerState._tflStatus = readTflStatus(data?.sourceStatuses);
       if (!Array.isArray(data?.sources)) return [];
       return data.sources;
@@ -228,6 +231,7 @@ export function createCatalog({ state: layerState, services, parts, source }) {
             (source.url ? 'configured' : 'seed'),
         ).toLowerCase(),
         feedType,
+        ...(source.taiwan ? { taiwan: source.taiwan } : {}),
         stalePositionOnly: source.stalePositionOnly === true,
         feedConfigured: typeof source.url === 'string' && !!source.url.trim(),
         lat,

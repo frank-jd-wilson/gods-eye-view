@@ -4,6 +4,7 @@ import {
   loadTaiwanSources,
   parseTaiwanCctvXml,
   resetTaiwanSourcesCache,
+  taiwanSourceStatus,
   taiwanCameraToSource,
   taiwanFrame,
   TAIWAN_FREEWAY_CCTV_URL,
@@ -74,13 +75,18 @@ test('parses the MOTC 2.0 table and registers the same camera still', () => {
   assert.equal(camera.lon, 121.735695);
   assert.equal(camera.name, '國道1號 S 0K+000 基隆端→基隆交流道');
   assert.equal(camera.cityId, 'taiwan');
-  assert.equal(camera.feedType, 'image');
+  assert.equal(camera.feedType, 'mjpeg');
   assert.equal(camera.headingConfidence, 'low');
   assert.equal(
     camera.url,
+    'https://cctvn.freeway.gov.tw/abs2mjpg/bmjpg?camera=10000',
+  );
+  assert.equal(
+    camera.snapshotUrl,
     'https://cctvn.freeway.gov.tw/abs2mjpg/jpg?camera=10000',
   );
-  assert.equal(camera.snapshotUrl, camera.url);
+  assert.equal(camera.taiwan.cctvId, 'CCTV-N1-S-0.000-M');
+  assert.equal(camera.taiwan.km, 0);
   assert.match(camera.license, /Open Government Data License, Taiwan/);
 });
 
@@ -264,7 +270,10 @@ test('a failed download serves the last good table', async (t) => {
   const fetchMock = t.mock.method(
     globalThis,
     'fetch',
-    async () => new Response(cctvXml(block())),
+    async () =>
+      new Response(cctvXml(block()), {
+        headers: { 'Content-Type': 'application/xml' },
+      }),
   );
   const first = await loadTaiwanSources();
   assert.deepEqual(
@@ -290,7 +299,10 @@ test('CCTV_TAIWAN_MAX_SOURCES is clamped to 1-2000', async (t) => {
   t.mock.method(
     globalThis,
     'fetch',
-    async () => new Response(cctvXml(...rows)),
+    async () =>
+      new Response(cctvXml(...rows), {
+        headers: { 'Content-Type': 'application/xml' },
+      }),
   );
   for (const [value, expected] of [
     ['0', 1],
@@ -339,4 +351,99 @@ test('camera numbers that are UUIDs keep their case in the frame URL only', () =
     'tw-freeway-cctvn5-c3a580c9-0232-46a1-bfc6-927590758ab4',
   );
   assert.match(camera.url, /camera=C3A580C9-0232-46A1-BFC6-927590758AB4$/);
+});
+
+test('Taiwan status reports valid, stale and expired catalogs without renewing the successful timestamp', async (t) => {
+  let now = 1_000_000;
+  t.mock.method(Date, 'now', () => now);
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(console, 'warn', () => {});
+  let fail = false;
+  t.mock.method(globalThis, 'fetch', async () =>
+    fail
+      ? new Response('', { status: 403 })
+      : new Response(cctvXml(block()), {
+          headers: { 'Content-Type': 'application/xml' },
+        }),
+  );
+  assert.equal((await loadTaiwanSources()).length, 1);
+  const updated = taiwanSourceStatus().updatedAt;
+  assert.equal(taiwanSourceStatus().state, 'ok');
+  fail = true;
+  now += 1000;
+  assert.equal((await loadTaiwanSources()).length, 1);
+  assert.equal(taiwanSourceStatus().state, 'stale');
+  assert.equal(taiwanSourceStatus().code, 'http-403');
+  assert.equal(taiwanSourceStatus().updatedAt, updated);
+  now += 24 * 60 * 60 * 1000;
+  assert.equal((await loadTaiwanSources()).length, 0);
+  assert.equal(taiwanSourceStatus().state, 'unavailable');
+  fail = false;
+  now += TAIWAN_RETRY_AFTER_FAILURE_MS + 1;
+  assert.equal((await loadTaiwanSources()).length, 1);
+  assert.equal(taiwanSourceStatus().state, 'ok');
+  assert.notEqual(taiwanSourceStatus().updatedAt, updated);
+});
+test('verification HTML cannot become a Taiwan camera catalog', async (t) => {
+  t.mock.method(console, 'warn', () => {});
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () =>
+      new Response('<html>Verification required</html>', {
+        headers: { 'Content-Type': 'text/html' },
+      }),
+  );
+  assert.deepEqual(await loadTaiwanSources(), []);
+  assert.equal(taiwanSourceStatus().state, 'unavailable');
+  assert.equal(taiwanSourceStatus().code, 'content-type');
+});
+
+for (const [name, damage] of [
+  ['missing root close', (xml) => xml.replace('</CCTVList>', '')],
+  ['missing CCTV close', (xml) => xml.replace('</CCTV>', '')],
+  ['nested tags', (xml) => xml.replace('</RoadName>', '</RoadDirection>')],
+  ['truncated document', (xml) => xml.slice(0, xml.indexOf('</CCTV>') + 7)],
+  [
+    'truncated second camera',
+    (xml) => xml.replace('</CCTVs>', '<CCTV><CCTVID>cut'),
+  ],
+])
+  test(`whole XML validation protects successful cache: ${name}`, async (t) => {
+    let now = 1_000_000,
+      xml = cctvXml(block());
+    t.mock.method(Date, 'now', () => now);
+    t.mock.method(console, 'log', () => {});
+    t.mock.method(console, 'warn', () => {});
+    t.mock.method(
+      globalThis,
+      'fetch',
+      async () =>
+        new Response(xml, { headers: { 'Content-Type': 'application/xml' } }),
+    );
+    const good = await loadTaiwanSources();
+    const stamp = taiwanSourceStatus().updatedAt;
+    xml = damage(xml);
+    now++;
+    assert.throws(() => parseTaiwanCctvXml(xml));
+    assert.deepEqual(await loadTaiwanSources(), good);
+    assert.equal(taiwanSourceStatus().updatedAt, stamp);
+    assert.equal(taiwanSourceStatus().code, 'invalid-xml');
+    xml = cctvXml(block());
+    now += TAIWAN_RETRY_AFTER_FAILURE_MS + 1;
+    assert.deepEqual(await loadTaiwanSources(), good);
+    assert.equal(taiwanSourceStatus().state, 'ok');
+    assert.notEqual(taiwanSourceStatus().updatedAt, stamp);
+  });
+test('well-formed empty directory is a successful authoritative empty result', async (t) => {
+  t.mock.method(console, 'log', () => {});
+  t.mock.method(
+    globalThis,
+    'fetch',
+    async () =>
+      new Response(cctvXml(), { headers: { 'Content-Type': 'text/xml' } }),
+  );
+  assert.deepEqual(await loadTaiwanSources(), []);
+  assert.equal(taiwanSourceStatus().state, 'ok');
+  assert.equal(taiwanSourceStatus().count, 0);
 });

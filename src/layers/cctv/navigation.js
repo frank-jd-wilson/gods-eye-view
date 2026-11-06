@@ -1,3 +1,4 @@
+import { cameraMatchesTaiwanFilter } from './taiwanFilters.js';
 import * as Cesium from 'cesium';
 import { CCTV_FOCUS_RESULT } from './policy.js';
 
@@ -20,6 +21,8 @@ export function createNavigation({
 
     let best = null;
     for (const record of layerState._records) {
+      if (!cameraMatchesTaiwanFilter(record.camera, layerState._taiwanFilter))
+        continue;
       const distKm = parts.model.haversineKm(
         lat,
         lon,
@@ -118,14 +121,18 @@ export function createNavigation({
       }
     }
 
+    const records = layerState._records.filter((record) =>
+      cameraMatchesTaiwanFilter(record.camera, layerState._taiwanFilter),
+    );
+    if (!records.length) return;
     const nextIdx = cctvCycleIndex(
-      layerState._records.findIndex(
+      records.findIndex(
         (record) => record.camera.id === layerState._activeCameraId,
       ),
       1,
-      layerState._records.length,
+      records.length,
     );
-    parts.selection.setActiveCamera(layerState._records[nextIdx].camera.id);
+    parts.selection.setActiveCamera(records[nextIdx].camera.id);
     layerState._lastHopAt = nowMs;
   }
 

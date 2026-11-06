@@ -1,3 +1,4 @@
+import { cameraMatchesTaiwanFilter } from './taiwanFilters.js';
 import * as Cesium from 'cesium';
 import { horizonOccluder } from '../../data/iconOrientation.js';
 import { isHeadingEstimated } from './headingConfidence.js';
@@ -153,7 +154,9 @@ export function createRendering({
     for (const record of layerState._records) {
       const bb = record.billboard;
       if (!bb) continue;
-      const visible = occluder.isPointVisible(bb.position);
+      const visible =
+        cameraMatchesTaiwanFilter(record.camera, layerState._taiwanFilter) &&
+        occluder.isPointVisible(bb.position);
       if (bb.show !== visible) bb.show = visible;
     }
   }
@@ -213,6 +216,11 @@ export function createRendering({
       );
     }
     for (const record of layerState._records) {
+      if (!cameraMatchesTaiwanFilter(record.camera, layerState._taiwanFilter)) {
+        if (record.billboard) record.billboard.show = false;
+        hideCctvRecordVisuals([record], parts.geometry.destroyViewshedVolume);
+        continue;
+      }
       const isActive = record.camera.id === activeId;
       if (record.billboard) {
         record.billboard.color = cameraColorFor(record);

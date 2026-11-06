@@ -120,14 +120,26 @@ export function createFrames({ state: layerState, services, parts, source }) {
     if (!runtime.buffers) {
       runtime.buffers = [0, 1].map(() => {
         const buffer = document.createElement('canvas');
-        buffer.width = PROJECTION_CANVAS_WIDTH;
-        buffer.height = PROJECTION_CANVAS_HEIGHT;
+        buffer.width =
+          runtime.mode === 'mjpeg'
+            ? runtime.canvas.width
+            : PROJECTION_CANVAS_WIDTH;
+        buffer.height =
+          runtime.mode === 'mjpeg'
+            ? runtime.canvas.height
+            : PROJECTION_CANVAS_HEIGHT;
         return buffer;
       });
       runtime.bufferIndex = 0;
     }
     runtime.bufferIndex = (runtime.bufferIndex + 1) % 2;
     const buffer = runtime.buffers[runtime.bufferIndex];
+    if (runtime.mode === 'mjpeg') {
+      if (buffer.width !== runtime.canvas.width)
+        buffer.width = runtime.canvas.width;
+      if (buffer.height !== runtime.canvas.height)
+        buffer.height = runtime.canvas.height;
+    }
     const ctx = buffer.getContext('2d');
     if (!ctx) return null;
     ctx.clearRect(0, 0, buffer.width, buffer.height);
@@ -153,7 +165,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
     const now = Date.now();
     if (
       now - parts.model.safeNumber(runtime.lastTextureSwapAt, 0) <
-      PROJECTION_TEXTURE_SWAP_MS
+      (runtime.mode === 'mjpeg' ? 100 : PROJECTION_TEXTURE_SWAP_MS)
     )
       return;
 
@@ -313,7 +325,7 @@ export function createFrames({ state: layerState, services, parts, source }) {
 
   function drawProjectionFrame(record) {
     const runtime = record?.projection;
-    if (!runtime || !runtime.ctx) return;
+    if (!runtime || !runtime.ctx || runtime.mode === 'mjpeg') return;
 
     const health = layerState._healthById.get(record.camera.id) || null;
 

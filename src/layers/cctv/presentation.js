@@ -108,6 +108,9 @@ export function createPresentation({
     const camera = record.camera;
     const health = layerState._healthById.get(camera.id) || null;
     const isActive = camera.id === resolvedActiveId;
+    const taiwanSnapshot =
+      camera.sourceKind === 'tw-freeway-motc' &&
+      record.projection?.mode === 'image';
     const refreshMs = isActive
       ? ACTIVE_FRAME_REFRESH_MS
       : IDLE_FRAME_REFRESH_MS;
@@ -140,20 +143,32 @@ export function createPresentation({
       mountHeightM: camera.mountHeightM,
       active: isActive,
       feedType: camera.feedType,
+      taiwan: camera.taiwan || null,
       mediaError: record.mediaError || null,
       stalePositionOnly: camera.stalePositionOnly === true,
       isVideo:
-        parts.model.isVideoFeedType(camera.feedType) &&
+        (parts.model.isVideoFeedType(camera.feedType) ||
+          (camera.feedType === 'mjpeg' &&
+            camera.sourceKind === 'tw-freeway-motc')) &&
         record.projection?.mode !== 'image',
       sourceKind: camera.stalePositionOnly
         ? 'snapshot'
-        : health?.sourceKind ||
-          camera.sourceKind ||
-          (camera.feedConfigured ? 'configured' : 'seed'),
-      sourceStatus: camera.stalePositionOnly
-        ? 'error'
-        : health?.status || 'unknown',
-      sourceMessage: camera.stalePositionOnly ? '' : health?.message || '',
+        : taiwanSnapshot
+          ? ['snapshot', 'streetview', 'synthetic'].includes(health?.sourceKind)
+            ? health.sourceKind
+            : 'unknown'
+          : health?.sourceKind ||
+            camera.sourceKind ||
+            (camera.feedConfigured ? 'configured' : 'seed'),
+      sourceStatus:
+        camera.stalePositionOnly || record.mediaError === 'taiwan-mjpeg'
+          ? 'error'
+          : health?.status || 'unknown',
+      sourceMessage:
+        camera.stalePositionOnly ||
+        (taiwanSnapshot && health?.sourceKind === 'live')
+          ? ''
+          : health?.message || '',
       sourceLabel: health?.label || camera.provider || '',
       credit: camera.credit || '',
       calibration: {
@@ -211,6 +226,8 @@ export function createPresentation({
       lastUpdate: layerState._lastUpdate,
       error: layerState._lastError,
       tflStatus: layerState._tflStatus,
+      taiwanStatus: layerState._taiwanStatus,
+      taiwanFilter: layerState._taiwanFilter || {},
       loading: {
         active: layerState._geoLoading,
         loaded: Math.min(layerState._geoLoadDone, layerState._geoLoadTotal),

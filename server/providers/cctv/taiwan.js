@@ -1,3 +1,4 @@
+import { SaxesParser } from 'saxes';
 import { CCTV_SOURCE_FETCH_TIMEOUT_MS } from './constants.js';
 import {
   cameraDisplayCode,
@@ -7,7 +8,7 @@ import {
 import { readResponseTextCapped } from '../common/http.js';
 
 /** Freeway Bureau (MOTC) CCTV static table in the national MOTC 2.0 XML
- * standard, published keyless and refreshed daily (~1,800 cameras). */
+ * schema used by the existing integration. Live availability and current terms require official verification. */
 export const TAIWAN_FREEWAY_CCTV_URL =
   'https://tisvcloud.freeway.gov.tw/history/motc20/CCTV.xml';
 /** The whole network is ~1.2 MB. */
@@ -33,6 +34,20 @@ const STREAM_TO_FRAME = new Map([
     ['/live-view/mjpg/video.cgi', '/live-view/jpg/image.cgi'],
   ],
 ]);
+
+export function mileKm(value) {
+  const match = /^(\d+)(?:[kK](?:\+(\d{1,3}))?|\.(\d{1,3}))?$/.exec(
+    String(value ?? '').trim(),
+  );
+  return match
+    ? Number(match[1]) +
+        (match[2]
+          ? Number(match[2]) / 1000
+          : match[3]
+            ? Number(`0.${match[3]}`)
+            : 0)
+    : null;
+}
 
 const DIRECTIONS = { N: 'N', S: 'S', E: 'E', W: 'W' };
 
@@ -100,6 +115,20 @@ function tag(block, name) {
  * @returns {Array<object>}
  */
 export function parseTaiwanCctvXml(xml) {
+  // Validate the WHOLE document before extracting any row or touching caches.
+  const parser = new SaxesParser({ xmlns: true });
+  let root = null;
+  parser.on('error', () => {
+    throw new Error('Invalid CCTV XML document');
+  });
+  parser.on('doctype', () => {
+    throw new Error('CCTV XML declarations refused');
+  });
+  parser.on('opentag', (node) => {
+    if (root === null) root = node.local;
+  });
+  parser.write(String(xml || '')).close();
+  if (root !== 'CCTVList') throw new Error('Invalid CCTV XML root');
   const rows = [];
   const blockRe = /<CCTV>([\s\S]*?)<\/CCTV>/g;
   let match;
@@ -143,6 +172,7 @@ export function taiwanFrame(streamUrl) {
   return {
     // Reconstruct so extra query parameters cannot alter the request.
     frameUrl: `https://${url.hostname}${paths[1]}?camera=${camera}`,
+    streamUrl: `https://${url.hostname}${paths[0]}?camera=${camera}`,
     host: url.hostname.split('.')[0],
     camera,
   };
@@ -168,7 +198,12 @@ export function taiwanCameraToSource(row) {
     .slice(0, 80);
   const cameraId = `tw-freeway-${frame.host}-${frame.camera.toLowerCase()}`;
   const road = String(row.roadName ?? '').trim();
-  const direction = DIRECTIONS[String(row.direction ?? '').trim()] || '';
+  const direction =
+    DIRECTIONS[
+      String(row.direction ?? '')
+        .trim()
+        .toUpperCase()
+    ] || '';
   const mile = String(row.mile ?? '').trim();
   const section = [row.sectionStart, row.sectionEnd]
     .map((part) => String(part ?? '').trim())
@@ -199,8 +234,9 @@ export function taiwanCameraToSource(row) {
     fovDeg: 44,
     rangeM: 145,
     mountHeightM: 8,
-    feedType: 'image',
-    url: imageUrl,
+    feedType: 'mjpeg',
+    taiwan: { cctvId: rawId, road, direction, mile, km: mileKm(mile) },
+    url: frame.streamUrl,
     snapshotUrl: imageUrl,
     sourceKind: 'tw-freeway-motc',
     license:
@@ -214,12 +250,34 @@ export function taiwanCameraToSource(row) {
 let lastGood = null;
 let lastGoodAt = 0;
 let retryAfter = 0;
+let sourceStatus = {
+  pack: 'taiwan',
+  state: 'unavailable',
+  code: 'not-loaded',
+  updatedAt: null,
+};
+export function taiwanSourceStatus() {
+  const staleAllowed =
+    lastGood && Date.now() - lastGoodAt <= TAIWAN_LAST_GOOD_MAX_AGE_MS;
+  return {
+    ...sourceStatus,
+    ...(sourceStatus.state === 'stale' && !staleAllowed
+      ? { state: 'unavailable' }
+      : {}),
+  };
+}
 
 /** Forget the last good table and any failure backoff (tests only). */
 export function resetTaiwanSourcesCache() {
   lastGood = null;
   lastGoodAt = 0;
   retryAfter = 0;
+  sourceStatus = {
+    pack: 'taiwan',
+    state: 'unavailable',
+    code: 'not-loaded',
+    updatedAt: null,
+  };
 }
 
 function fallbackSources() {
@@ -247,6 +305,7 @@ function taiwanSourceCap() {
  */
 export async function loadTaiwanSources() {
   if (Date.now() < retryAfter) return fallbackSources();
+  let failureCode = 'network';
   try {
     const signal = AbortSignal.timeout(CCTV_SOURCE_FETCH_TIMEOUT_MS);
     const response = await fetch(
@@ -258,6 +317,8 @@ export async function loadTaiwanSources() {
       },
     );
     if (!response.ok) {
+      failureCode =
+        response.status >= 500 ? 'http-5xx' : `http-${response.status}`;
       await response.body?.cancel().catch(() => {});
       throw new Error(
         response.status >= 300 && response.status < 400
@@ -265,17 +326,29 @@ export async function loadTaiwanSources() {
           : `HTTP ${response.status}`,
       );
     }
+    failureCode = 'content-type';
+    const contentType = response.headers.get('content-type') || '';
+    if (
+      !/^(?:application|text)\/(?:[a-z0-9.+-]*\+)?xml(?:;|$)/i.test(contentType)
+    )
+      throw new Error('Unexpected catalog Content-Type');
+    failureCode = 'response-body';
     const xml = await readResponseTextCapped(
       response,
       TAIWAN_MAX_CATALOG_BYTES,
       signal,
     );
+    failureCode = 'invalid-xml';
+    if (!/<CCTVList(?:\s|>)/.test(xml) || /<!DOCTYPE|<!ENTITY/i.test(xml))
+      throw new Error('Invalid XML structure');
     const cameras = new Map();
-    for (const row of parseTaiwanCctvXml(xml)) {
+    const rows = parseTaiwanCctvXml(xml);
+    for (const row of rows) {
       const camera = taiwanCameraToSource(row);
       if (camera && !cameras.has(camera.id)) cameras.set(camera.id, camera);
     }
-    if (!cameras.size) throw new Error('no usable cameras in the table');
+    if (rows.length && !cameras.size)
+      throw new Error('no usable cameras in the table');
     const sources = prioritizeSources(
       [...cameras.values()],
       taiwanSourceCap(),
@@ -287,16 +360,31 @@ export async function loadTaiwanSources() {
     lastGood = sources;
     lastGoodAt = Date.now();
     retryAfter = 0;
+    sourceStatus = {
+      pack: 'taiwan',
+      state: 'ok',
+      code: 'ok',
+      updatedAt: new Date(lastGoodAt).toISOString(),
+      sourceUpdatedAt: Number.isFinite(Date.parse(tag(xml, 'UpdateTime')))
+        ? new Date(tag(xml, 'UpdateTime')).toISOString()
+        : null,
+      count: sources.length,
+    };
     return sources;
   } catch (error) {
     retryAfter = Date.now() + TAIWAN_RETRY_AFTER_FAILURE_MS;
     const fallback = fallbackSources();
+    sourceStatus = {
+      pack: 'taiwan',
+      state: fallback.length ? 'stale' : 'unavailable',
+      code: ['TimeoutError', 'AbortError'].includes(error?.name)
+        ? 'timeout'
+        : failureCode,
+      updatedAt: lastGoodAt ? new Date(lastGoodAt).toISOString() : null,
+      count: fallback.length,
+    };
     console.warn(
-      `[CCTV] Taiwan camera download failed (${error?.message || error}); ` +
-        (fallback.length
-          ? `serving the last good ${fallback.length} cameras`
-          : 'no Taiwan cameras') +
-        ', next attempt in 1 h',
+      '[CCTV] Taiwan camera directory unavailable; using bounded fallback',
     );
     return fallback;
   }

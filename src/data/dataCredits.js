@@ -261,7 +261,7 @@ export const DATA_CREDITS = [
   {
     key: 'taiwan-cctv',
     html:
-      'Freeway camera stills (Taiwan): ' +
+      'Freeway camera imagery (Taiwan): ' +
       '<a href="https://www.freeway.gov.tw/" target="_blank" rel="noopener">Freeway Bureau, MOTC</a>, ' +
       'CCTV static data (MOTC 2.0), released under the ' +
       '<a href="https://data.gov.tw/license" target="_blank" rel="noopener">Open Government Data License, Taiwan (Version 1.0)</a>',

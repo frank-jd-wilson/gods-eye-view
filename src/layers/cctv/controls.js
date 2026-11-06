@@ -1,3 +1,4 @@
+import { cameraMatchesTaiwanFilter } from './taiwanFilters.js';
 import { tflDirectoryMessage } from './tflStatus.js';
 import {
   DEFAULT_UPDATE_INTERVAL_MS,
@@ -12,6 +13,55 @@ export function createControls({ state: layerState, services, parts, source }) {
   const { CCTV_ACTIVATION_RESULT } = services.activation;
 
   const methods = {
+    setTaiwanFilter(filter = {}) {
+      const min =
+        filter.minKm === '' || filter.minKm == null ? '' : Number(filter.minKm);
+      const max =
+        filter.maxKm === '' || filter.maxKm == null ? '' : Number(filter.maxKm);
+      if (
+        (min !== '' && (!Number.isFinite(min) || min < 0)) ||
+        (max !== '' && (!Number.isFinite(max) || max < 0)) ||
+        (min !== '' && max !== '' && min > max)
+      )
+        return false;
+      const playback = filter.playback === 'image' ? 'image' : 'mjpeg';
+      const changedPlayback =
+        (layerState._taiwanFilter?.playback || 'mjpeg') !== playback;
+      layerState._taiwanFilter = {
+        region: filter.region === 'taiwan' ? 'taiwan' : '',
+        playback,
+        road: String(filter.road || '').slice(0, 40),
+        direction: ['N', 'S', 'E', 'W'].includes(filter.direction)
+          ? filter.direction
+          : '',
+        minKm: min,
+        maxKm: max,
+      };
+      const active = parts.selection.getActiveRecord();
+      if (
+        active &&
+        !cameraMatchesTaiwanFilter(active.camera, layerState._taiwanFilter)
+      )
+        parts.selection.deactivateActiveCamera();
+      const selected = parts.selection.getActiveRecord();
+      if (
+        changedPlayback &&
+        selected?.camera.sourceKind === 'tw-freeway-motc'
+      ) {
+        parts.projection.destroyProjectionRuntime(selected.projection);
+        selected.projection = null;
+        selected.mediaError = null;
+        if (layerState._enabled)
+          parts.projection.ensureProjectionRuntime(selected);
+      }
+      parts.rendering.refreshCoverageStyles();
+      parts.rendering.refreshHorizonCulling();
+      parts.cards.refreshAmbientCards();
+      parts.presentation.notifyListeners();
+      layerState._viewer?.scene?.requestRender?.();
+      return true;
+    },
+
     id: 'cctv',
 
     name: 'CCTV',
@@ -207,21 +257,21 @@ export function createControls({ state: layerState, services, parts, source }) {
      */
     getDetectableObjects(options = {}) {
       if (!layerState._enabled || layerState._records.length === 0) return [];
+      const records = layerState._records.filter((record) =>
+        cameraMatchesTaiwanFilter(record.camera, layerState._taiwanFilter),
+      );
       const maxCount = Number.isFinite(options.maxCount)
         ? Math.max(1, Math.floor(options.maxCount))
-        : layerState._records.length;
+        : records.length;
       const seed = Number.isFinite(options.seed) ? Math.floor(options.seed) : 0;
-      const stride = Math.max(
-        1,
-        Math.ceil(layerState._records.length / maxCount),
-      );
+      const stride = Math.max(1, Math.ceil(records.length / maxCount));
       const start = seed % stride;
 
       const objects = [];
-      for (let i = start; i < layerState._records.length; i += stride) {
-        const camera = layerState._records[i].camera;
+      for (let i = start; i < records.length; i += stride) {
+        const camera = records[i].camera;
         objects.push({
-          position: layerState._records[i].position,
+          position: records[i].position,
           sourceId: camera.id,
           // Short semantic code where the id is opaque (see cameraDisplayCode).
           id: `CAM-${camera.code || camera.id}`,
@@ -326,14 +376,17 @@ export function createControls({ state: layerState, services, parts, source }) {
      * @returns {string|null} The newly active camera ID, or null if catalog is empty.
      */
     cycleCamera(step = 1, options = {}) {
-      if (!layerState._records.length) return null;
+      const records = layerState._records.filter((record) =>
+        cameraMatchesTaiwanFilter(record.camera, layerState._taiwanFilter),
+      );
+      if (!records.length) return null;
       const current = parts.selection.getActiveRecord();
       const nextIdx = parts.navigation.cctvCycleIndex(
-        layerState._records.findIndex((record) => record === current),
+        records.findIndex((record) => record === current),
         step,
-        layerState._records.length,
+        records.length,
       );
-      const nextId = layerState._records[nextIdx].camera.id;
+      const nextId = records[nextIdx].camera.id;
       parts.selection.setActiveCamera(nextId);
       if (options.focus) {
         parts.navigation.focusCamera(nextId, options.durationSec || 1.8);

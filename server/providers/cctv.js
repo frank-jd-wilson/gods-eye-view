@@ -1,3 +1,5 @@
+import { fetchTaiwanMedia } from './cctv/taiwanTransport.js';
+import { taiwanFrame } from './cctv/taiwan.js';
 import { createCctvCatalog } from './cctv/catalog.js';
 import { normalizeFeedType, isVideoFeedType } from './cctv/normalize.js';
 import {
@@ -5,6 +7,7 @@ import {
   cctvLiveMediaType,
   cctvRasterImageType,
   proxyMediaResponse,
+  createTaiwanStreamLimiter,
   fetchCctvImageFromUpstream,
   fetchTxdotSnapshot,
   fetchCctvMediaUpstream,
@@ -34,6 +37,7 @@ export { CCTV_FRAME_FETCH_TIMEOUT_MS, fetchCctvImageFromUpstream };
  * @returns {import('vite').Plugin}
  */
 export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
+  const taiwanStreams = createTaiwanStreamLimiter();
   const getCctvSources = createCctvCatalog({ sourceRoot });
   /** @type {Map<string,{id:string,status:string,sourceKind:string,label:string,message:string,updatedAt:number}>} */
   const health = new Map();
@@ -71,9 +75,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
     return {
       id: cameraId,
       feedType,
-      mediaUrl: isVideoFeedType(feedType)
-        ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
-        : null,
+      mediaUrl:
+        isVideoFeedType(feedType) ||
+        (feedType === 'mjpeg' && source?.sourceKind === 'tw-freeway-motc')
+          ? `/api/cctv/media/${encodeURIComponent(cameraId)}`
+          : null,
       frameUrl: `/api/cctv/frame/${encodeURIComponent(cameraId)}`,
       provider: source?.provider || '',
       sourceKind:
@@ -201,6 +207,7 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               credit: source.credit || '',
               code: source.code || '',
               groundHeights: source.groundHeights || null,
+              ...(source.taiwan ? { taiwan: source.taiwan } : {}),
             })),
           };
           res.writeHead(200, {
@@ -252,6 +259,18 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           const source = sourceById.get(cameraId);
           const mediaUrl = source?.url || '';
           const feedType = normalizeFeedType(source?.feedType || 'image');
+          if (
+            source?.sourceKind === 'tw-freeway-motc' &&
+            taiwanFrame(mediaUrl)?.streamUrl !== mediaUrl
+          ) {
+            res.writeHead(403, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                error: 'Unregistered Taiwan camera destination',
+              }),
+            );
+            return;
+          }
           // Live feeds only. A still camera is served by /frame, whose fetch
           // keeps redirects on the registered origin, accepts only raster
           // images and caps the body; relaying it here would bypass all three.
@@ -397,6 +416,22 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
           // header arrives, and a viewer who leaves during it must take the
           // upstream request with them.
           const downstream = watchDownstreamClose(res);
+          const taiwanStream =
+            source?.sourceKind === 'tw-freeway-motc' && feedType === 'mjpeg';
+          const lease = taiwanStream ? taiwanStreams.acquire(res) : null;
+          if (taiwanStream && !lease) {
+            res.writeHead(429, {
+              'Content-Type': 'application/json',
+              'Retry-After': '5',
+            });
+            res.end(
+              JSON.stringify({
+                error: 'Taiwan camera stream concurrency limit reached',
+              }),
+            );
+            return;
+          }
+          let relaying = false;
           try {
             const upstreamHeaders = {
               'User-Agent': 'gods-eye-view-cctv-proxy/1.0',
@@ -405,11 +440,17 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             // not accept is dropped and the request proceeds without one.
             const requestRange = sanitizeCctvRangeHeader(req.headers?.range);
             if (requestRange) upstreamHeaders.Range = requestRange;
-            const upstream = await fetchCctvMediaUpstream(mediaUrl, {
+            const upstream = await (
+              source?.sourceKind === 'tw-freeway-motc'
+                ? fetchTaiwanMedia
+                : fetchCctvMediaUpstream
+            )(mediaUrl, {
               headers: upstreamHeaders,
-              signal: downstream.signal,
+              signal: lease
+                ? AbortSignal.any([downstream.signal, lease.signal])
+                : downstream.signal,
             });
-            if (downstream.closed) {
+            if (downstream.closed || lease?.signal.aborted) {
               // The headers arrived for a viewer who is no longer there.
               try {
                 await upstream.body?.cancel();
@@ -467,6 +508,8 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               res.end(JSON.stringify({ error: 'Media proxy failed' }));
               return;
             }
+            const taiwanLive =
+              source?.sourceKind === 'tw-freeway-motc' && feedType === 'mjpeg';
             setHealth(cameraId, {
               status: 'ok',
               sourceKind:
@@ -475,7 +518,9 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                   ? 'clip'
                   : isVideoFeedType(feedType)
                     ? 'live'
-                    : 'snapshot',
+                    : taiwanLive
+                      ? 'live'
+                      : 'snapshot',
               label: source?.provider || 'Configured source',
               message:
                 source?.sourceKind === 'tfl-open-data' &&
@@ -483,10 +528,16 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
                   ? 'Recorded video clip connected'
                   : isVideoFeedType(feedType)
                     ? 'Live stream connected'
-                    : 'Snapshot feed connected',
+                    : taiwanLive
+                      ? 'Live MJPEG connected'
+                      : 'Snapshot feed connected',
             });
 
+            relaying = true;
             await proxyMediaResponse(res, upstream, {
+              ...(taiwanStream
+                ? { maxBytes: 64 * 1024 * 1024, idleTimeoutMs: 15_000 }
+                : {}),
               contentType,
               sourceHeader: isVideoFeedType(feedType)
                 ? 'live-media'
@@ -494,7 +545,11 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
             });
             return;
           } catch (error) {
-            if (downstream.closed) {
+            if (
+              downstream.closed ||
+              lease?.signal.aborted ||
+              res.writableEnded
+            ) {
               // The viewer left mid-request. That is not a camera fault and
               // there is nobody to answer.
               return;
@@ -525,10 +580,14 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
               JSON.stringify({
                 error: timedOut
                   ? 'Upstream media timeout'
-                  : 'Media proxy failed',
+                  : error?.code === 'INVALID_RESPONSE'
+                    ? 'Invalid media response'
+                    : 'Media proxy failed',
               }),
             );
             return;
+          } finally {
+            if (!relaying) lease?.release();
           }
         }
 
@@ -563,7 +622,12 @@ export function cctvProxy({ sourceRoot = process.cwd() } = {}) {
         const upstreamImage =
           source?.sourceKind === 'txdot-its'
             ? await fetchTxdotSnapshot(upstreamCandidate)
-            : await fetchCctvImageFromUpstream(upstreamCandidate);
+            : await fetchCctvImageFromUpstream(
+                upstreamCandidate,
+                source?.sourceKind === 'tw-freeway-motc'
+                  ? { fetchImpl: fetchTaiwanMedia }
+                  : {},
+              );
         if (upstreamImage?.ok) {
           setHealth(cameraId, {
             status: 'ok',

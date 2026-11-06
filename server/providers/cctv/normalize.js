@@ -615,6 +615,22 @@ export function normalizeSourceItem(item) {
     groundElevationM: toFiniteNumber(item.groundElevationM),
     feedType: normalizeFeedType(item.feedType || item.type || ''),
     url: typeof item.url === 'string' ? item.url : '',
+    ...(item.sourceKind === 'tw-freeway-motc' && item.taiwan
+      ? {
+          taiwan: {
+            cctvId: String(item.taiwan.cctvId || '').slice(0, 80),
+            road: String(item.taiwan.road || '').slice(0, 40),
+            direction: /^[NSEW]$/.test(item.taiwan.direction)
+              ? item.taiwan.direction
+              : '',
+            mile: String(item.taiwan.mile || '').slice(0, 40),
+            km:
+              Number.isFinite(item.taiwan.km) && item.taiwan.km >= 0
+                ? item.taiwan.km
+                : null,
+          },
+        }
+      : {}),
     snapshotUrl: typeof item.snapshotUrl === 'string' ? item.snapshotUrl : '',
     license: String(item.license || item.licenseNote || ''),
     // Per-camera attribution for feeds a partner supplies inside a pack

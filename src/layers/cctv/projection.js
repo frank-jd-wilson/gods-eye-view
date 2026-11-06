@@ -1,3 +1,4 @@
+import { attachMjpegSurface } from './mjpegPlayback.js';
 import { attachCctvVideo } from './videoPlayback.js';
 import * as Cesium from 'cesium';
 import {
@@ -176,8 +177,17 @@ export function createProjection({
     canvas.height = PROJECTION_CANVAS_HEIGHT;
     const ctx = canvas.getContext('2d', { alpha: true });
 
-    const feedType = parts.model.normalizeFeedType(record.camera.feedType);
-    const mode = parts.model.isVideoFeedType(feedType) ? 'video' : 'image';
+    const feedType =
+      record.camera.sourceKind === 'tw-freeway-motc' &&
+      layerState._taiwanFilter?.playback === 'image'
+        ? 'image'
+        : parts.model.normalizeFeedType(record.camera.feedType);
+    const mode =
+      feedType === 'mjpeg' && record.camera.sourceKind === 'tw-freeway-motc'
+        ? 'mjpeg'
+        : parts.model.isVideoFeedType(feedType)
+          ? 'video'
+          : 'image';
     const runtime = {
       mode,
       canvas,
@@ -213,7 +223,55 @@ export function createProjection({
 
     parts.frames.paintProjectionPlaceholder(ctx, record.camera);
 
-    if (mode === 'video') {
+    if (mode === 'mjpeg') {
+      pauseInactiveProjectionFeeds(record.camera.id);
+      const surface = document.createElement('canvas');
+      runtime.video = surface;
+      runtime.playback = attachMjpegSurface(
+        surface,
+        parts.frames.mediaUrlFor(record.camera),
+        {
+          onFrame: () => {
+            if (runtime.disposed) return;
+            if (runtime.canvas.width !== surface.width)
+              runtime.canvas.width = surface.width;
+            if (runtime.canvas.height !== surface.height)
+              runtime.canvas.height = surface.height;
+            runtime.ctx.drawImage(
+              surface,
+              0,
+              0,
+              runtime.canvas.width,
+              runtime.canvas.height,
+            );
+            runtime.canvasStamp++;
+            parts.frames.refreshProjectionTextures(record);
+            layerState._viewer?.scene?.requestRender?.();
+          },
+          onFailure: () => {
+            if (runtime.disposed) return;
+            runtime.playback?.dispose();
+            runtime.playback = null;
+            surface.width = surface.height = 0;
+            runtime.video = null;
+            runtime.mode = 'image';
+            record.mediaError = 'taiwan-mjpeg';
+            runtime.image = new Image();
+            runtime.image.onload = () => {
+              runtime.imageReady = true;
+              runtime.imageLoading = false;
+              runtime.imageStamp = Date.now();
+            };
+            runtime.image.onerror = () => {
+              runtime.imageLoading = false;
+              runtime.imageReady = false;
+            };
+            parts.frames.refreshProjectionImage(record, true);
+            parts.presentation.notifyListeners();
+          },
+        },
+      );
+    } else if (mode === 'video') {
       const video = document.createElement('video');
       video.muted = true;
       video.playsInline = true;
@@ -232,6 +290,10 @@ export function createProjection({
       };
       video.addEventListener('loadedmetadata', bindVideoTexture);
       video.addEventListener('resize', bindVideoTexture);
+      runtime.removeVideoListeners = () => {
+        video.removeEventListener('loadedmetadata', bindVideoTexture);
+        video.removeEventListener('resize', bindVideoTexture);
+      };
       runtime.video = video;
       runtime.playback = attachCctvVideo(
         video,
@@ -242,6 +304,8 @@ export function createProjection({
             if (record.camera.sourceKind === 'tfl-open-data')
               record.mediaError = reason || 'media';
             if (runtime.disposed) return;
+            runtime.playback?.dispose();
+            runtime.playback = null;
             runtime.video = null;
             runtime.mode = 'image';
             runtime.image = new Image();
@@ -327,6 +391,14 @@ export function createProjection({
   function destroyProjectionRuntime(runtime) {
     if (!runtime || runtime.disposed) return;
     runtime.disposed = true;
+    layerState._projectionEntities = layerState._projectionEntities.filter(
+      (entry) => entry !== runtime,
+    );
+    for (const record of layerState._records) {
+      if (record.projection === runtime) record.projection = null;
+    }
+    runtime.removeVideoListeners?.();
+    runtime.removeVideoListeners = null;
     runtime.playback?.dispose();
     runtime.playback = null;
     if (runtime.image) {
@@ -336,7 +408,7 @@ export function createProjection({
     }
     if (runtime.video) {
       runtime.video.pause();
-      runtime.video.removeAttribute('src');
+      runtime.video.removeAttribute?.('src');
       runtime.video.load();
     }
     if (runtime.planeEntity && layerState._viewer) {
@@ -348,6 +420,22 @@ export function createProjection({
     runtime.overlayEntry = null;
     runtime.labelPosition = null;
     runtime.planeMaterial = null;
+    const canvases = new Set([
+      runtime.canvas,
+      runtime.signatureCanvas,
+      ...(runtime.buffers || []),
+      runtime.mode === 'mjpeg' ? runtime.video : null,
+    ]);
+    for (const canvas of canvases) {
+      if (canvas) canvas.width = canvas.height = 0;
+    }
+    runtime.canvas =
+      runtime.ctx =
+      runtime.signatureCanvas =
+      runtime.signatureCtx =
+        null;
+    runtime.buffers = runtime.lastFrameSignature = null;
+    runtime.image = runtime.video = null;
   }
 
   function startProjectionLoop() {

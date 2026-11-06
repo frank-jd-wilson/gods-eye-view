@@ -29,6 +29,7 @@ const SOURCE_STATUS_LABELS = Object.freeze({
 
 const SOURCE_MESSAGES = Object.freeze({
   'Recorded video clip connected': msg('Recorded video clip connected'),
+  'Live MJPEG connected': msg('Live MJPEG connected'),
   'Live HLS connected': msg('Live HLS connected'),
   'Live HLS unavailable': msg('Live HLS unavailable'),
   'No stream URL configured': msg('No stream URL configured'),

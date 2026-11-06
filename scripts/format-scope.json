@@ -1,4 +1,8 @@
 [
+  "server/providers/cctv/taiwanTransport.js",
+  "src/layers/cctv/mjpegPlayback.js",
+  "src/layers/cctv/taiwanFilters.js",
+  "src/ui/taiwanCctvControls.js",
   ".prettierrc.json",
   "package.json",
   "scripts/format-scope.json",

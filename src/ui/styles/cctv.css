@@ -363,3 +363,23 @@ html:not([lang='en']) #cctv-camera-select {
   flex: 1 1 100%;
   order: -1;
 }
+
+/* Taiwan-specific source controls stay inside the existing CCTV panel. */
+#cctv-taiwan-controls,
+#cctv-taiwan-controls [data-tw-details]:not([hidden]) {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+#cctv-taiwan-controls .gev-field {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+#cctv-taiwan-controls label {
+  display: grid;
+}
+#cctv-taiwan-controls [data-tw-status] {
+  overflow-wrap: anywhere;
+}

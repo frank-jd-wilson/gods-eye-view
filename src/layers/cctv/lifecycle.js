@@ -37,6 +37,8 @@ export function createLifecycle({
     layerState._lastHealthSyncAt = 0;
     layerState._lastError = null;
     layerState._tflStatus = null;
+    layerState._taiwanStatus = null;
+    layerState._taiwanFilter = {};
     layerState._lastFocusStyleAt = 0;
     layerState._activeFocusStyleCount = 0;
     // FIX ①/③: the discovered tileset handle is scene-scoped — drop it so a fresh

@@ -110,3 +110,29 @@ test('localization changes badge copy while preserving machine state ids', (test
   );
   assert.equal(controls._cctvQualityChip.dataset.calBadge, 'edited');
 });
+
+test('Taiwan fallback notice never mislabels synthetic or Street View images as CCTV snapshots', (ctx) => {
+  const { controls, document } = fixture(ctx);
+  controls._cctvMeta = document.createElement('div');
+  ctx.after(() => setLocale('en'));
+  for (const locale of ['en', 'zh-TW']) {
+    setLocale(locale);
+    for (const sourceKind of ['streetview', 'synthetic', 'snapshot']) {
+      controls._renderCctvState({
+        enabled: true,
+        activeCameraId: 'one',
+        activeCamera: {
+          id: 'one',
+          sourceKind,
+          sourceStatus: 'error',
+          mediaError: 'taiwan-mjpeg',
+          isVideo: false,
+        },
+      });
+      const text = controls._cctvMeta.textContent;
+      assert.ok(text.includes(locale === 'en' ? 'not live' : '非即時'));
+      assert.ok(!text.includes('showing a JPEG snapshot'));
+      assert.ok(!text.includes('顯示 JPEG 快照'));
+    }
+  }
+});
